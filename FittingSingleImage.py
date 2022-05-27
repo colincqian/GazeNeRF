@@ -241,7 +241,7 @@ class FittingImage(object):
             
         optimizer = torch.optim.Adam(params_group, betas=(0.9, 0.999))
         lr_func = lambda epoch: 0.1 ** (epoch / step_decay)
-        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_func)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_func) #adaptive learning rate
         
         gt_img = (self.img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         
@@ -250,9 +250,10 @@ class FittingImage(object):
         for iter_ in loop_bar:
             with torch.set_grad_enabled(True):
                 code_info, opt_code_dict, cam_info, delta_cam_info = self.build_code_and_cam()
-                
+                import ipdb
+                ipdb.set_trace()
                 pred_dict = self.net( "test", self.xy, self.uv,  **code_info, **cam_info)
-
+                #pred_dict['coarse_dict'] -> dict_keys(['merge_img', 'bg_img']) -> torch.Size([1, 3, 512, 512])
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=delta_cam_info, opt_code_dict=opt_code_dict, pred_dict=pred_dict, 
                     gt_rgb=self.img_tensor, mask_tensor=self.mask_tensor
@@ -302,7 +303,6 @@ class FittingImage(object):
             
             
     def fitting_single_images(self, img_path, mask_path, para_3dmm_path, tar_code_path, save_root):
-        
         self.load_data(img_path, mask_path, para_3dmm_path)
         base_name = os.path.basename(img_path)[4:-4]
 

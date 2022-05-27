@@ -73,33 +73,36 @@ class HeadNeRFNet(nn.Module):
     def calc_color_with_code(self, fg_vps, shape_code, appea_code, FGvp_embedder, 
                              FGvd_embedder, FG_zdists, FG_zvals, fine_level):
         
-        ori_FGvp_embedder = torch.cat([FGvp_embedder, shape_code], dim=1)
+        ori_FGvp_embedder = torch.cat([FGvp_embedder, shape_code], dim=1) #torch.Size([1, 242, 1024, 64]) position encoder and id+exp
         
         if self.include_vd:
             ori_FGvd_embedder = torch.cat([FGvd_embedder, appea_code], dim=1)
         else:
-            ori_FGvd_embedder = appea_code
-            
+            ori_FGvd_embedder = appea_code # torch.Size([1, 127, 1024, 64])
+        
+        ##for each pixel(1024) we sample 64 points and each points we predict F(x) (256) and density (1)
         if fine_level:
             FGmlp_FGvp_rgb, FGmlp_FGvp_density = self.fine_fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder)
         else:
-            FGmlp_FGvp_rgb, FGmlp_FGvp_density = self.fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder)
-            
+            FGmlp_FGvp_rgb, FGmlp_FGvp_density = self.fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder)#neural radiance field torch.Size([1, 256, 1024, 64]),torch.Size([1, 1, 1024, 64])
+
+        ##feature map I_f(256x32x32) is achieved by volumn rendering strategy  
         fg_feat, bg_alpha, batch_ray_depth, ori_batch_weight = self.calc_color_func(fg_vps, FGmlp_FGvp_rgb,
                                                                                     FGmlp_FGvp_density,
                                                                                     FG_zdists,
-                                                                                    FG_zvals)
+                                                                                    FG_zvals) #torch.Size([1, 256, 1024]), torch.Size([1, 1, 1024]), torch.Size([1, 1, 1024]), torch.Size([1, 1, 1024, 64])
         
         batch_size = fg_feat.size(0)
-        fg_feat = fg_feat.view(batch_size, self.featmap_nc, self.featmap_size, self.featmap_size)
+        fg_feat = fg_feat.view(batch_size, self.featmap_nc, self.featmap_size, self.featmap_size) #torch.Size([1, 256, 32, 32])
 
-        bg_alpha = bg_alpha.view(batch_size, 1, self.featmap_size, self.featmap_size)
+        bg_alpha = bg_alpha.view(batch_size, 1, self.featmap_size, self.featmap_size)# torch.Size([1, 1, 32, 32])
 
-        bg_featmap = self.neural_render.get_bg_featmap()
-        bg_img = self.neural_render(bg_featmap)
+        bg_featmap = self.neural_render.get_bg_featmap() #torch.Size([1, 256, 32, 32])
+        bg_img = self.neural_render(bg_featmap) #torch.Size([1, 3, 512, 512])
 
-        merge_featmap = fg_feat + bg_alpha * bg_featmap
-        merge_img = self.neural_render(merge_featmap)
+        ##Map feature map I_f(256x32x32) to image I (3x256x256)
+        merge_featmap = fg_feat + bg_alpha * bg_featmap #torch.Size([1, 256, 32, 32])
+        merge_img = self.neural_render(merge_featmap) #torch.Size([1, 3, 512, 512])
 
         res = {
             "merge_img": merge_img, 
@@ -118,15 +121,16 @@ class HeadNeRFNet(nn.Module):
         ):
         
         # cam - to - world
-        batch_size, tv, n_r = batch_xy.size()
+        batch_size, tv, n_r = batch_xy.size() #torch.Size([1, 2, 1024])
         assert tv == 2
         assert bg_code is None
-        
-        fg_sample_dict = self.sample_func(batch_xy, batch_Rmats, batch_Tvecs, batch_inv_inmats, for_train)
-        fg_vps = fg_sample_dict["pts"]
-        fg_dirs = fg_sample_dict["dirs"]
+        import ipdb
+        ipdb.set_trace()
+        fg_sample_dict = self.sample_func(batch_xy, batch_Rmats, batch_Tvecs, batch_inv_inmats, for_train) #dict_keys(['pts', 'dirs', 'zvals', 'z_dists', 'batch_ray_o', 'batch_ray_d', 'batch_ray_l'])
+        fg_vps = fg_sample_dict["pts"]  #torch.Size([1, 3, 1024, 64])
+        fg_dirs = fg_sample_dict["dirs"] #torch.Size([1, 3, 1024, 64])
 
-        FGvp_embedder = self.vp_encoder(fg_vps)
+        FGvp_embedder = self.vp_encoder(fg_vps) #torch.Size([1, 3, 1024, 64]) -> torch.Size([1, 63, 1024, 64])
         
         if self.include_vd:
             FGvd_embedder = self.vd_encoder(fg_dirs)
@@ -136,8 +140,8 @@ class HeadNeRFNet(nn.Module):
         FG_zvals = fg_sample_dict["zvals"]
         FG_zdists = fg_sample_dict["z_dists"]
         
-        cur_shape_code = shape_code.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, n_r, self.num_sample_coarse)
-        cur_appea_code = appea_code.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, n_r, self.num_sample_coarse)
+        cur_shape_code = shape_code.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, n_r, self.num_sample_coarse) #torch.Size([1, 179]) -> torch.Size([1, 179, 1024, 64])
+        cur_appea_code = appea_code.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, n_r, self.num_sample_coarse) #torch.Size([1, 127]) -> torch.Size([1, 127, 1024, 64])
 
         c_ori_res, batch_weight = self.calc_color_with_code(
             fg_vps, cur_shape_code, cur_appea_code, FGvp_embedder, FGvd_embedder, FG_zdists, FG_zvals, fine_level = False
