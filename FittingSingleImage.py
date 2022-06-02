@@ -33,11 +33,10 @@ class FittingImage(object):
 
 
     def build_info(self):
-
         check_dict = torch.load(self.model_path, map_location=torch.device("cpu"))
 
         para_dict = check_dict["para"]
-        self.opt = BaseOptions(para_dict)
+        self.opt = BaseOptions(para_dict) #just use the same feature size as the para_dict
 
         self.featmap_size = self.opt.featmap_size
         self.pred_img_size = self.opt.pred_img_size
@@ -85,6 +84,12 @@ class FittingImage(object):
         with open(para_3dmm_path, "rb") as f: nl3dmm_para_dict = pkl.load(f)
         base_code = nl3dmm_para_dict["code"].detach().unsqueeze(0).to(self.device)
         
+        #ablation on 3DMM model codes
+        IGNORE_3DMM_CODE=True
+        if IGNORE_3DMM_CODE:
+            base_code_zero = torch.zeros_like(base_code)
+            base_code = base_code_zero
+        
         self.base_iden = base_code[:, :self.opt.iden_code_dims]
         self.base_expr = base_code[:, self.opt.iden_code_dims:self.opt.iden_code_dims + self.opt.expr_code_dims]
         self.base_text = base_code[:, self.opt.iden_code_dims + self.opt.expr_code_dims:self.opt.iden_code_dims 
@@ -108,6 +113,14 @@ class FittingImage(object):
         
         self.temp_inmat = temp_inmat
         self.temp_inv_inmat = temp_inv_inmat
+
+        if IGNORE_3DMM_CODE:
+            batch_size = self.base_c2w_Rmat.size(0)
+            self.base_c2w_Tvec = torch.zeros_like(self.base_c2w_Tvec)
+            self.base_c2w_Rmat = torch.eye(3).repeat(batch_size,1).view(batch_size,3,3)
+        
+        import ipdb
+        ipdb.set_trace()
 
         self.cam_info = {
             "batch_Rmats": self.base_c2w_Rmat.to(self.device),
@@ -316,7 +329,7 @@ class FittingImage(object):
             self.tar_code_info = tar_code_info
         else:
             self.tar_code_info = None
-
+        #tar_code_info is only determining the rendering result of morphing
         self.perform_fitting()
         self.save_res(base_name, save_root)
         
