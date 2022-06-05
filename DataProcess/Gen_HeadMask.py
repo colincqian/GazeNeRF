@@ -41,7 +41,7 @@ class GenHeadMask(object):
         ])
         
         
-    def main_process(self, img_dir):
+    def main_process(self, img_dir,*args):
         img_path_list = [x for x in glob("%s/*.png" % img_dir) if "mask" not in x]  
         if len(img_path_list) == 0:
             print("Dir: %s does include any .png images." % img_dir)
@@ -79,6 +79,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='The code for generating head mask images.')
     parser.add_argument("--gpu_id", type=int, default=0)
     parser.add_argument("--img_dir", type=str, required=True)
+    parser.add_argument("--format", type=str, default='png')
     args = parser.parse_args()
 
     gpu_id = args.gpu_id

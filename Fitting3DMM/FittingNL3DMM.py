@@ -107,7 +107,6 @@ class FittingNL3DMM(object):
         c2l_eulur = torch.zeros((batch_size, 3), dtype=torch.float32, requires_grad=True, device=self.device)
         c2l_Tvecs = torch.zeros((batch_size, 3), dtype=torch.float32, requires_grad=True, device=self.device)
         c2l_Scales = 1.0
-
         init_lr_1 = 0.01
         params_group = [
             {'params': [c2l_eulur, c2l_Tvecs], 'lr': init_lr_1},
@@ -289,6 +288,8 @@ if __name__ == "__main__":
 
     tt = FittingNL3DMM(img_size=args.img_size, intermediate_size=args.intermediate_size, 
                         gpu_id=0, batch_size=args.batch_size, img_dir=args.img_dir)
+
     tt.main_process()
+
 
 
