@@ -107,7 +107,6 @@ class FittingNL3DMM(object):
         c2l_eulur = torch.zeros((batch_size, 3), dtype=torch.float32, requires_grad=True, device=self.device)
         c2l_Tvecs = torch.zeros((batch_size, 3), dtype=torch.float32, requires_grad=True, device=self.device)
         c2l_Scales = 1.0
-
         init_lr_1 = 0.01
         params_group = [
             {'params': [c2l_eulur, c2l_Tvecs], 'lr': init_lr_1},
@@ -270,13 +269,18 @@ class FittingNL3DMM(object):
             else:
                 idx_list = [x for x in range(id_s, total_sample_num)]
             
-            temp_data = self.data_utils.load_batch_sample(idx_list)
-            self.opt_batch_data(**temp_data)
+            try:
+                temp_data = self.data_utils.load_batch_sample(idx_list)
+                self.opt_batch_data(**temp_data)
+            except:
+                print('skip data')
+                continue
             
             # exit(0)
             
             
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(description='The code for generating 3DMM parameters and camera parameters.')
     # parser.add_argument("--gpu_id", type=int, default=0)
     
@@ -289,6 +293,8 @@ if __name__ == "__main__":
 
     tt = FittingNL3DMM(img_size=args.img_size, intermediate_size=args.intermediate_size, 
                         gpu_id=0, batch_size=args.batch_size, img_dir=args.img_dir)
+
     tt.main_process()
+
 
 

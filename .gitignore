@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+test_data
+ConfigModels
+LatentCodeSamples
+TrainedModels
+XGaze_data
+XGaze_dataset/xgaze

@@ -34,11 +34,10 @@ class FittingImage(object):
 
 
     def build_info(self):
-
         check_dict = torch.load(self.model_path, map_location=torch.device("cpu"))
 
         para_dict = check_dict["para"]
-        self.opt = BaseOptions(para_dict)
+        self.opt = BaseOptions(para_dict) #just use the same feature size as the para_dict
 
         self.featmap_size = self.opt.featmap_size
         self.pred_img_size = self.opt.pred_img_size
@@ -86,6 +85,12 @@ class FittingImage(object):
         with open(para_3dmm_path, "rb") as f: nl3dmm_para_dict = pkl.load(f)
         base_code = nl3dmm_para_dict["code"].detach().unsqueeze(0).to(self.device)
         
+        #ablation on 3DMM model codes
+        IGNORE_3DMM_CODE=True
+        if IGNORE_3DMM_CODE:
+            base_code_zero = torch.zeros_like(base_code)
+            base_code = base_code_zero
+        
         self.base_iden = base_code[:, :self.opt.iden_code_dims]
         self.base_expr = base_code[:, self.opt.iden_code_dims:self.opt.iden_code_dims + self.opt.expr_code_dims]
         self.base_text = base_code[:, self.opt.iden_code_dims + self.opt.expr_code_dims:self.opt.iden_code_dims 
@@ -109,6 +114,14 @@ class FittingImage(object):
         
         self.temp_inmat = temp_inmat
         self.temp_inv_inmat = temp_inv_inmat
+
+        if IGNORE_3DMM_CODE:
+            batch_size = self.base_c2w_Rmat.size(0)
+            self.base_c2w_Tvec = torch.zeros_like(self.base_c2w_Tvec)
+            self.base_c2w_Rmat = torch.eye(3).repeat(batch_size,1).view(batch_size,3,3)
+        
+        import ipdb
+        ipdb.set_trace()
 
         self.cam_info = {
             "batch_Rmats": self.base_c2w_Rmat.to(self.device),
@@ -242,7 +255,7 @@ class FittingImage(object):
             
         optimizer = torch.optim.Adam(params_group, betas=(0.9, 0.999))
         lr_func = lambda epoch: 0.1 ** (epoch / step_decay)
-        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_func)
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_func) #adaptive learning rate
         
         gt_img = (self.img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         
@@ -251,9 +264,10 @@ class FittingImage(object):
         for iter_ in loop_bar:
             with torch.set_grad_enabled(True):
                 code_info, opt_code_dict, cam_info, delta_cam_info = self.build_code_and_cam()
-                
+                import ipdb
+                ipdb.set_trace()
                 pred_dict = self.net( "test", self.xy, self.uv,  **code_info, **cam_info)
-
+                #pred_dict['coarse_dict'] -> dict_keys(['merge_img', 'bg_img']) -> torch.Size([1, 3, 512, 512])
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=delta_cam_info, opt_code_dict=opt_code_dict, pred_dict=pred_dict, 
                     gt_rgb=self.img_tensor, mask_tensor=self.mask_tensor
@@ -313,7 +327,6 @@ class FittingImage(object):
 
 
     def fitting_single_images(self, img_path, mask_path, para_3dmm_path, tar_code_path, save_root):
-        
         self.load_data(img_path, mask_path, para_3dmm_path)
         base_name = os.path.basename(img_path)[4:-4]
 
@@ -327,13 +340,14 @@ class FittingImage(object):
             self.tar_code_info = tar_code_info
         else:
             self.tar_code_info = None
-
+        #tar_code_info is only determining the rendering result of morphing
         self.perform_fitting()
         self.save_res(base_name, save_root)
         
 
 if __name__ == "__main__":
-
+    import warnings
+    warnings.filterwarnings("error")
     torch.manual_seed(45)  # cpu
     torch.cuda.manual_seed(55)  # gpu
     np.random.seed(65)  # numpy

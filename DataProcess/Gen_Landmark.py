@@ -17,7 +17,7 @@ class Gen2DLandmarks(object):
         
     def main_process(self, img_dir):
         
-        img_path_list = [x for x in glob("%s/*.png" % img_dir) if "mask" not in x]
+        img_path_list = [x for x in glob("%s/*.png" % img_dir) if "mask" not in x and not os.path.exists(x.replace(".png","_lm2d.txt"))]
         
         if len(img_path_list) == 0:
             print("Dir: %s does include any .png images." % img_dir)
@@ -33,10 +33,13 @@ class Gen2DLandmarks(object):
             
             if res is None:
                 print("Warning: can't predict the landmark info of %s" % img_path)
+                continue
                 
             # base_name = img_path[img_path.rfind("/") + 1:-4]
             save_path = img_path[:-4] + "_lm2d.txt"
+        
             preds = res[0]
+
             with open(save_path, "w") as f:
                 for tt in preds:
                     f.write("%f \n"%(tt[0]))
