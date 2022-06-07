@@ -59,6 +59,7 @@ class GenHeadMask(object):
             img = img.to(self.device)
             with torch.set_grad_enabled(False):
                 pred_res = self.net(img)
+
                 out = pred_res[0]
 
             res = out.squeeze(0).cpu().numpy().argmax(0)

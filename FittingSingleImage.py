@@ -335,7 +335,8 @@ class FittingImage(object):
         
 
 if __name__ == "__main__":
-
+    import warnings
+    warnings.filterwarnings("error")
     torch.manual_seed(45)  # cpu
     torch.cuda.manual_seed(55)  # gpu
     np.random.seed(65)  # numpy

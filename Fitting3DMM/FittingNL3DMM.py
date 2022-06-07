@@ -269,13 +269,18 @@ class FittingNL3DMM(object):
             else:
                 idx_list = [x for x in range(id_s, total_sample_num)]
             
-            temp_data = self.data_utils.load_batch_sample(idx_list)
-            self.opt_batch_data(**temp_data)
+            try:
+                temp_data = self.data_utils.load_batch_sample(idx_list)
+                self.opt_batch_data(**temp_data)
+            except:
+                print('skip data')
+                continue
             
             # exit(0)
             
             
 if __name__ == "__main__":
+
     parser = argparse.ArgumentParser(description='The code for generating 3DMM parameters and camera parameters.')
     # parser.add_argument("--gpu_id", type=int, default=0)
     

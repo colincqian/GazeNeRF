@@ -1,7 +1,6 @@
 import json
 import os
 
-
 class BaseOptions(object):
     def __init__(self, para_dict = None) -> None:
         super().__init__()
