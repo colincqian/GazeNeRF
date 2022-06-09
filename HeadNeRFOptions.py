@@ -25,9 +25,9 @@ class BaseOptions(object):
         self.mlp_hidden_nchannels = 384
 
         if para_dict is None:
-            self.featmap_size = 64
+            self.featmap_size = 32
             self.featmap_nc = 256       # nc: num_of_channel
-            self.pred_img_size = 512
+            self.pred_img_size = 256
         else:
             self.featmap_size = para_dict["featmap_size"]
             self.featmap_nc = para_dict["featmap_nc"]
@@ -42,10 +42,11 @@ dataset_config={
     'camera_dir':'./XGaze_data/xgaze/camera_parameters',
     '_3dmm_data_dir':'./XGaze_data/normalized_250_data',
     'transform':None, 
-    'is_shuffle':True,
+    'is_shuffle':False,
     'index_file':None, 
     'is_load_label':True,
-    'device': 'cpu' 
+    'device': 'cpu',
+    'filter_view': True
 
 }
 
@@ -79,7 +80,7 @@ train_arg.add_argument('--is_train', type=str2bool, default=True,
                        help='Whether to train or test the model')
 train_arg.add_argument('--epochs', type=int, default=25,
                        help='# of epochs to train for')
-train_arg.add_argument('--init_lr', type=float, default=0.0001,
+train_arg.add_argument('--init_lr', type=float, default=0.00001,
                        help='Initial learning rate value')
 train_arg.add_argument('--lr_patience', type=int, default=10,
                        help='Number of epochs to wait before reducing lr')
@@ -99,6 +100,9 @@ misc_arg.add_argument('--ckpt_dir', type=str, default='./ckpt',
 
 misc_arg.add_argument('--headnerf_options', type=str, default='',
                       help='File path that can load headnerf options and model parameters')
+
+misc_arg.add_argument('--use_gt_camera', type=str2bool, default=True,
+                      help="Whether use gt camera parameter in ETH_XGaze")
 
 def get_config():
     config, unparsed = parser.parse_known_args()

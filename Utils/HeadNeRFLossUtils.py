@@ -127,6 +127,7 @@ class HeadNeRFLossUtils(object):
         bg_loss = torch.mean((bg_img - bg_value) * (bg_img - bg_value))
         
         res_img = data_dict["merge_img"]
+        res_img = torch.nan_to_num(res_img, nan=0.0)
         head_mask_c3b = head_mask_c1b.expand(-1, 3, -1, -1)
         head_loss = F.mse_loss(res_img[head_mask_c3b], gt_rgb[head_mask_c3b])
 

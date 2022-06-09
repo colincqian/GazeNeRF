@@ -267,6 +267,8 @@ class FittingImage(object):
                 #code info: appea: torch.Size([1, 127]), shape:torch.Size([1, 179])
                 #cam info : batch_Rmats: torch.Size([1, 3, 3])  batch_Tvecs:torch.Size([1, 3, 1])   batch_inv_inmats:torch.Size([1, 3, 3])
                 #pred_dict['coarse_dict'] -> dict_keys(['merge_img', 'bg_img']) -> torch.Size([1, 3, 512, 512])
+
+                
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=delta_cam_info, opt_code_dict=opt_code_dict, pred_dict=pred_dict, 
                     gt_rgb=self.img_tensor, mask_tensor=self.mask_tensor

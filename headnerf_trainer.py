@@ -1,3 +1,4 @@
+from cmath import isnan
 import torch
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
@@ -36,6 +37,7 @@ class Trainer(object):
             self.num_test = len(self.test_loader.dataset)
             print(f'Load {self.num_test} data samples')
         self.batch_size = config.batch_size
+        self.use_gt_camera = config.use_gt_camera
 
         # training params
         self.epochs = config.epochs  # the total epoch to train
@@ -121,7 +123,10 @@ class Trainer(object):
 
         self.writer.close()
     
-    def build_code_and_cam_info(self,mm3d_param):
+    def build_code_and_cam_info(self,data_info):
+
+
+        mm3d_param = data_info['_3dmm']
         base_iden = mm3d_param['code_info']['base_iden'].squeeze(1)
         base_expr = mm3d_param['code_info']['base_expr'].squeeze(1)
         base_text = mm3d_param['code_info']['base_text'].squeeze(1)
@@ -131,9 +136,15 @@ class Trainer(object):
         appea_code = torch.cat([base_text, base_illu], dim=-1) 
         
 
-        base_Rmats = mm3d_param['cam_info']["batch_Rmats"].squeeze(1)
-        base_Tvecs = mm3d_param['cam_info']["batch_Tvecs"].squeeze(1)
-        batch_inv_inmat = mm3d_param['cam_info']["batch_inv_inmats"].squeeze(1)
+        if self.use_gt_camera:
+            base_Rmats = torch.tensor(data_info['camera_parameter']['cam_rotation'],device=self.device,dtype=torch.float)
+            base_Tvecs = torch.tensor(data_info['camera_parameter']['cam_translation'],device=self.device,dtype=torch.float)
+            batch_inv_inmat = mm3d_param['cam_info']["batch_inv_inmats"].squeeze(1)
+        else:
+            base_Rmats = mm3d_param['cam_info']["batch_Rmats"].squeeze(1)
+            base_Tvecs = mm3d_param['cam_info']["batch_Tvecs"].squeeze(1)
+            batch_inv_inmat = mm3d_param['cam_info']["batch_inv_inmats"].squeeze(1)
+        
 
         cam_info = {
                 "batch_Rmats": base_Rmats.to(self.device),
@@ -151,9 +162,12 @@ class Trainer(object):
         loop_bar = tqdm(enumerate(data_loader), leave=True)
         for iter,data_info in loop_bar:
             with torch.set_grad_enabled(True):
-                code_info,cam_info = self.build_code_and_cam_info(data_info['_3dmm'])
+                code_info,cam_info = self.build_code_and_cam_info(data_info)
+
                 pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
+
                 gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1)
+
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=None, opt_code_dict=None, pred_dict=pred_dict, 
                     gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device)
@@ -161,6 +175,9 @@ class Trainer(object):
             self.optimizer.zero_grad()
             batch_loss_dict["total_loss"].backward()
             self.optimizer.step()
+            if isnan(batch_loss_dict["head_loss"].item()):
+                import ipdb
+                ipdb.set_trace()
             loop_bar.set_description("Opt, Loss: %.6f  " % batch_loss_dict["head_loss"].item())          
     
     
