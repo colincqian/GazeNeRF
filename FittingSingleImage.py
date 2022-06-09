@@ -118,9 +118,6 @@ class FittingImage(object):
             batch_size = self.base_c2w_Rmat.size(0)
             self.base_c2w_Tvec = torch.zeros_like(self.base_c2w_Tvec)
             self.base_c2w_Rmat = torch.eye(3).repeat(batch_size,1).view(batch_size,3,3)
-        
-        import ipdb
-        ipdb.set_trace()
 
         self.cam_info = {
             "batch_Rmats": self.base_c2w_Rmat.to(self.device),
@@ -266,6 +263,9 @@ class FittingImage(object):
                 import ipdb
                 ipdb.set_trace()
                 pred_dict = self.net( "test", self.xy, self.uv,  **code_info, **cam_info)
+                #input: xy: torch.Size([1, 2, 1024]),   uv:torch.Size([1, 1024, 2]) 
+                #code info: appea: torch.Size([1, 127]), shape:torch.Size([1, 179])
+                #cam info : batch_Rmats: torch.Size([1, 3, 3])  batch_Tvecs:torch.Size([1, 3, 1])   batch_inv_inmats:torch.Size([1, 3, 3])
                 #pred_dict['coarse_dict'] -> dict_keys(['merge_img', 'bg_img']) -> torch.Size([1, 3, 512, 512])
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=delta_cam_info, opt_code_dict=opt_code_dict, pred_dict=pred_dict, 

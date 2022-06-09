@@ -17,7 +17,7 @@ import cv2
 import csv
 import pickle as pkl
 
-from XGaze_camera_Loader import Camera_Loader
+from XGaze_utils.XGaze_camera_Loader import Camera_Loader
 
 trans_train = transforms.Compose([
         transforms.ToPILImage(),
@@ -102,33 +102,42 @@ def get_train_loader(data_dir,
     train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=num_workers)
 
     return train_loader
+# def get_data_loader(data_dir,
+#                     annotation_path,
+#                     batch_size,
+#                     num_workers=4,
+#                     is_shuffle=True):
+#     gpu_id = 0
+#     frame_selected=[0]
+#     subject_selected=[0]
+#     device = torch.device("cuda:%d" % gpu_id)
+#     options = BaseOptions()
 
+#     dataset = XGaze_raw(data_dir,
+#                         frame_selected,
+#                         subject_selected,
+#                         annotation_path,
+#                         device,
+#                         options,
+#                         is_shuffle=is_shuffle
+#                         )
+#     return DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
 
-def get_data_loader(data_dir,
-                    annotation_path,
-                    batch_size,
-                    num_workers=4,
-                    is_shuffle=True):
-    gpu_id = 0
-    frame_selected=[0]
-    subject_selected=[0]
-    device = torch.device("cuda:%d" % gpu_id)
-    options = BaseOptions()
+def get_data_loader(   mode='train',
+                        batch_size=8,
+                        num_workers=4,
+                        dataset_config=None):
 
-    dataset = XGaze_raw(data_dir,
-                        frame_selected,
-                        subject_selected,
-                        annotation_path,
-                        device,
-                        options,
-                        is_shuffle=is_shuffle
-                        )
-    return DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
+    if dataset_config is None:
+        print('dataset configure file required!!')
+        raise
+    
+    dataset_config['sub_folder'] = mode #'train' or 'test'
+    
+    XGaze_dataset = GazeDataset_normailzed(**dataset_config)
 
+    return DataLoader(XGaze_dataset,batch_size=batch_size,num_workers=num_workers)
 
-    ##TODO:1. test dataset of our normalized data and see output
-    ##     2. arrange the dataloader with training script
-    ##     3. Consider faster way to process 3dmm data
 
 #########put this in config file after all testing########################
 class BaseOptions(object):
@@ -591,3 +600,6 @@ if __name__=='__main__':
         import ipdb;
         ipdb.set_trace()
         pass
+
+
+

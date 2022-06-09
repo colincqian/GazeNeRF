@@ -124,8 +124,6 @@ class HeadNeRFNet(nn.Module):
         batch_size, tv, n_r = batch_xy.size() #torch.Size([1, 2, 1024])
         assert tv == 2
         assert bg_code is None
-        import ipdb
-        ipdb.set_trace()
         fg_sample_dict = self.sample_func(batch_xy, batch_Rmats, batch_Tvecs, batch_inv_inmats, for_train) #dict_keys(['pts', 'dirs', 'zvals', 'z_dists', 'batch_ray_o', 'batch_ray_d', 'batch_ray_l'])
         fg_vps = fg_sample_dict["pts"]  #torch.Size([1, 3, 1024, 64])
         fg_dirs = fg_sample_dict["dirs"] #torch.Size([1, 3, 1024, 64])
