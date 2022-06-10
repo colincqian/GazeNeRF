@@ -1,4 +1,6 @@
 from cmath import isnan
+
+
 import torch
 import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
@@ -18,6 +20,7 @@ from NetWorks.HeadNeRFNet import HeadNeRFNet
 from Utils.HeadNeRFLossUtils import HeadNeRFLossUtils
 from Utils.RenderUtils import RenderUtils
 from tqdm import tqdm
+import cv2
 
 class Trainer(object):
     def __init__(self,config,data_loader):
@@ -62,6 +65,7 @@ class Trainer(object):
 
         #build model
         if self.headnerf_options:
+            
             check_dict = torch.load(self.headnerf_options, map_location=torch.device("cpu"))
 
             para_dict = check_dict["para"]
@@ -69,6 +73,7 @@ class Trainer(object):
 
             self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False)        
             self.model.load_state_dict(check_dict["net"])
+            print(f'load model parameter from {self.headnerf_options}')
         else:
             self.opt = BaseOptions()
             self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False)        
@@ -96,8 +101,8 @@ class Trainer(object):
         self.loss_utils = HeadNeRFLossUtils(device=self.device)
         self.render_utils = RenderUtils(view_num=45, device=self.device, opt=self.opt)
         
-        self.xy = self.render_utils.ray_xy.to(self.device)
-        self.uv = self.render_utils.ray_uv.to(self.device)
+        self.xy = self.render_utils.ray_xy.to(self.device).expand(self.batch_size,-1,-1)
+        self.uv = self.render_utils.ray_uv.to(self.device).expand(self.batch_size,-1,-1)
     
     def train(self):
         for epoch in range(self.start_epoch,self.epochs):
@@ -137,8 +142,8 @@ class Trainer(object):
         
 
         if self.use_gt_camera:
-            base_Rmats = torch.tensor(data_info['camera_parameter']['cam_rotation'],device=self.device,dtype=torch.float)
-            base_Tvecs = torch.tensor(data_info['camera_parameter']['cam_translation'],device=self.device,dtype=torch.float)
+            base_Rmats = data_info['camera_parameter']['cam_rotation'].clone().detach().float().to(self.device)
+            base_Tvecs = data_info['camera_parameter']['cam_translation'].clone().detach().float().to(self.device)
             batch_inv_inmat = mm3d_param['cam_info']["batch_inv_inmats"].squeeze(1)
         else:
             base_Rmats = mm3d_param['cam_info']["batch_Rmats"].squeeze(1)
@@ -159,7 +164,7 @@ class Trainer(object):
         return code_info,cam_info
 
     def train_one_epoch(self, epoch, data_loader, is_train=True):
-        loop_bar = tqdm(enumerate(data_loader), leave=True)
+        loop_bar = tqdm(enumerate(data_loader), leave=False, total=len(data_loader))
         for iter,data_info in loop_bar:
             with torch.set_grad_enabled(True):
                 code_info,cam_info = self.build_code_and_cam_info(data_info)
@@ -176,11 +181,14 @@ class Trainer(object):
             batch_loss_dict["total_loss"].backward()
             self.optimizer.step()
             if isnan(batch_loss_dict["head_loss"].item()):
-                import ipdb
-                ipdb.set_trace()
-            loop_bar.set_description("Opt, Loss: %.6f  " % batch_loss_dict["head_loss"].item())          
-    
-    
+                import warnings
+                warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
+            loop_bar.set_description("Opt, Loss: %.6f  " % batch_loss_dict["head_loss"].item())  
+
+            if iter % self.print_freq == 0 and iter != 0:
+                self._display_current_rendered_image(pred_dict,gt_img,iter)
+
+
 
     def save_checkpoint(self, state, add=None):
         """
@@ -212,4 +220,22 @@ class Trainer(object):
             "[*] Loaded {} checkpoint @ epoch {}".format(
                 input_file_path, ckpt['epoch'])
         )
+
+    def _display_current_rendered_image(self,pred_dict,img_tensor,iter):
+        coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
+        coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+        gt_img = (img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+        res_img = np.concatenate([gt_img, coarse_fg_rgb], axis=1)
+
+        
+        log_path = './logs/temp_image/'
+        if not os.path.exists(log_path):
+            os.mkdir(log_path)
+        cv2.imwrite(os.path.join(log_path,str(iter).zfill(6) + 'iter_image.png'))
+        print('Save temporary rendered image to {log_path}')
+
+        # cv2.imshow('current rendering', res_img)
+        # cv2.waitKey(0) 
+        # #closing all open windows 
+        # cv2.destroyAllWindows() 
 

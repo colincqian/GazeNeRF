@@ -321,7 +321,7 @@ class GazeDataset_normailzed(Dataset):
 
         self.hdf = None
         self.transform = transform
-    
+
     def __len__(self):
         return len(self.idx_to_kv)
 
@@ -344,7 +344,9 @@ class GazeDataset_normailzed(Dataset):
         #<KeysViewHDF5 ['cam_index', 'face_gaze', 'face_head_pose', 'face_mat_norm', 'face_patch',     'frame_index']>
         #               (10098, 1)    (10098, 2)     (10098, 2)     (10098, 3, 3)  (10098, 224, 224, 3)  (10098, 1)
         #                       
-        image = self.hdf['face_patch'][idx, :] ##(224,224,3)
+        #image = self.hdf['face_patch'][idx, :] ##(224,224,3)
+        image = cv2.imread(img_path)##(250,250,3)
+
         image = image[:, :, [2, 1, 0]]  # from BGR to RGB
         if self.transform is not None:
             image = self.transform(image)
@@ -361,7 +363,6 @@ class GazeDataset_normailzed(Dataset):
         image[mask_img < 0.5] = 1.0
         img_tensor = (torch.from_numpy(image).permute(2, 0, 1)).unsqueeze(0).to(self.device)#not sure RGB or BRG
         mask_tensor = torch.from_numpy(mask_img[None, :, :]).unsqueeze(0).to(self.device)
-
 
         
         if self.is_load_label:
@@ -452,6 +453,36 @@ class GazeDataset_normailzed(Dataset):
             "inmat" : temp_inmat,
             "inv_inmat" : temp_inv_inmat
         }
+
+    def debug_iter(self,idx):
+        key, idx = self.idx_to_kv[idx]
+
+        self.hdf = h5py.File(os.path.join(self.path, self.sub_folder, self.selected_keys[key]), 'r', swmr=True)
+        assert self.hdf.swmr_mode
+
+        img_name = str(idx+1).zfill(6)+'.png'
+        img_path = os.path.join(self._3dmm_data_dir,img_name)
+
+        mask_img = cv2.imread(img_path.replace(".png","_mask.png"), cv2.IMREAD_UNCHANGED).astype(np.uint8)
+        
+
+
+        # Get face image
+        #<KeysViewHDF5 ['cam_index', 'face_gaze', 'face_head_pose', 'face_mat_norm', 'face_patch',     'frame_index']>
+        #               (10098, 1)    (10098, 2)     (10098, 2)     (10098, 3, 3)  (10098, 224, 224, 3)  (10098, 1)
+        #                       
+        image_load = cv2.imread(img_path)
+
+        image_load = image_load[:, :, [2, 1, 0]]  # from BGR to RGB
+        image_load = image_load.astype(np.float32)/255.0
+        image_load[mask_img < 0.5] = 1.0
+
+        cv2.imshow('image mask', mask_img)
+        cv2.waitKey(0) 
+        cv2.destroyAllWindows() 
+        cv2.imshow('image after masking',image_load)
+        cv2.waitKey(0) 
+        cv2.destroyAllWindows() 
 
 
 ################data loader for raw data#############################
