@@ -1,3 +1,5 @@
+from logging import raiseExceptions
+from signal import raise_signal
 import numpy as np
 import torch
 from torchvision import transforms
@@ -7,9 +9,16 @@ import json
 import random
 from typing import List
 
+import json
+import os
+
+import h5py
 import cv2
 import csv
 import pickle as pkl
+
+from XGaze_utils.XGaze_camera_Loader import Camera_Loader
+
 
 trans_train = transforms.Compose([
         transforms.ToPILImage(),
@@ -72,79 +81,6 @@ def get_test_loader(data_dir,
 
     return test_loader
 
-
-# class GazeDataset(Dataset):
-#     def __init__(self, dataset_path: str, keys_to_use: List[str] = None, sub_folder='', transform=None, is_shuffle=True,
-#                  index_file=None, is_load_label=True):
-#         self.path = dataset_path
-#         self.hdfs = {}
-#         self.sub_folder = sub_folder
-#         self.is_load_label = is_load_label
-
-#         # assert len(set(keys_to_use) - set(all_keys)) == 0
-#         # Select keys
-#         # TODO: select only people with sufficient entries?
-#         self.selected_keys = [k for k in keys_to_use]
-#         assert len(self.selected_keys) > 0
-
-#         for num_i in range(0, len(self.selected_keys)):
-#             file_path = os.path.join(self.path, self.sub_folder, self.selected_keys[num_i])
-#             self.hdfs[num_i] = h5py.File(file_path, 'r', swmr=True)
-#             # print('read file: ', os.path.join(self.path, self.selected_keys[num_i]))
-#             assert self.hdfs[num_i].swmr_mode
-
-#         # Construct mapping from full-data index to key and person-specific index
-#         if index_file is None:
-#             self.idx_to_kv = []
-#             for num_i in range(0, len(self.selected_keys)):
-#                 n = self.hdfs[num_i]["face_patch"].shape[0]
-#                 self.idx_to_kv += [(num_i, i) for i in range(n)]
-#         else:
-#             print('load the file: ', index_file)
-#             self.idx_to_kv = np.loadtxt(index_file, dtype=np.int)
-
-#         for num_i in range(0, len(self.hdfs)):
-#             if self.hdfs[num_i]:
-#                 self.hdfs[num_i].close()
-#                 self.hdfs[num_i] = None
-
-#         if is_shuffle:
-#             random.shuffle(self.idx_to_kv)  # random the order to stable the training
-
-#         self.hdf = None
-#         self.transform = transform
-
-#     def __len__(self):
-#         return len(self.idx_to_kv)
-
-#     def __del__(self):
-#         for num_i in range(0, len(self.hdfs)):
-#             if self.hdfs[num_i]:
-#                 self.hdfs[num_i].close()
-#                 self.hdfs[num_i] = None
-
-#     def __getitem__(self, idx):
-#         key, idx = self.idx_to_kv[idx]
-
-#         self.hdf = h5py.File(os.path.join(self.path, self.sub_folder, self.selected_keys[key]), 'r', swmr=True)
-#         assert self.hdf.swmr_mode
-
-#         # Get face image
-#         image = self.hdf['face_patch'][idx, :]
-#         image = image[:, :, [2, 1, 0]]  # from BGR to RGB
-#         image = self.transform(image)
-
-#         # Get labels
-#         if self.is_load_label:
-#             gaze_label = self.hdf['face_gaze'][idx, :]
-#             gaze_label = gaze_label.astype('float')
-#             return image, gaze_label
-#         else:
-#             return image
-
-import json
-import os
-
 def get_train_loader(data_dir,
                            batch_size,
                            num_workers=4,
@@ -167,29 +103,44 @@ def get_train_loader(data_dir,
     train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=num_workers)
 
     return train_loader
+# def get_data_loader(data_dir,
+#                     annotation_path,
+#                     batch_size,
+#                     num_workers=4,
+#                     is_shuffle=True):
+#     gpu_id = 0
+#     frame_selected=[0]
+#     subject_selected=[0]
+#     device = torch.device("cuda:%d" % gpu_id)
+#     options = BaseOptions()
+
+#     dataset = XGaze_raw(data_dir,
+#                         frame_selected,
+#                         subject_selected,
+#                         annotation_path,
+#                         device,
+#                         options,
+#                         is_shuffle=is_shuffle
+#                         )
+#     return DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
+
+def get_data_loader(   mode='train',
+                        batch_size=8,
+                        num_workers=4,
+                        dataset_config=None):
+
+    if dataset_config is None:
+        print('dataset configure file required!!')
+        raise
+    
+    dataset_config['sub_folder'] = mode #'train' or 'test'
+    
+    XGaze_dataset = GazeDataset_normailzed(**dataset_config)
+
+    return DataLoader(XGaze_dataset,batch_size=batch_size,num_workers=num_workers)
 
 
-def get_data_loader(data_dir,
-                    annotation_path,
-                    batch_size,
-                    num_workers=4,
-                    is_shuffle=True):
-    gpu_id = 0
-    frame_selected=[0]
-    subject_selected=[0]
-    device = torch.device("cuda:%d" % gpu_id)
-    options = BaseOptions()
-
-    dataset = XGaze_raw(data_dir,
-                        frame_selected,
-                        subject_selected,
-                        annotation_path,
-                        device,
-                        options,
-                        is_shuffle=is_shuffle
-                        )
-    return DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
-
+#########put this in config file after all testing########################
 class BaseOptions(object):
     def __init__(self, para_dict = None) -> None:
         super().__init__()
@@ -221,7 +172,289 @@ class BaseOptions(object):
             self.featmap_nc = para_dict["featmap_nc"]
             self.pred_img_size = para_dict["pred_img_size"]
 
+            
+#######################original gaze dataset##################################
+class GazeDataset(Dataset):
+    def __init__(self, dataset_path: str, keys_to_use: List[str] = None, sub_folder='', transform=None, is_shuffle=True,
+                 index_file=None, is_load_label=True):
+        self.path = dataset_path
+        self.hdfs = {}
+        self.sub_folder = sub_folder
+        self.is_load_label = is_load_label
+        
 
+        # assert len(set(keys_to_use) - set(all_keys)) == 0
+        # Select keys
+        # TODO: select only people with sufficient entries?
+        self.selected_keys = [k for k in keys_to_use] #list of h5 file name
+        assert len(self.selected_keys) > 0
+
+        for num_i in range(0, len(self.selected_keys)):
+            file_path = os.path.join(self.path, self.sub_folder, self.selected_keys[num_i])
+            self.hdfs[num_i] = h5py.File(file_path, 'r', swmr=True)
+            # print('read file: ', os.path.join(self.path, self.selected_keys[num_i]))
+            assert self.hdfs[num_i].swmr_mode
+
+        # Construct mapping from full-data index to key and person-specific index
+        if index_file is None:
+            self.idx_to_kv = []
+            for num_i in range(0, len(self.selected_keys)):
+                n = self.hdfs[num_i]["face_patch"].shape[0]
+                self.idx_to_kv += [(num_i, i) for i in range(n)]
+        else:
+            print('load the file: ', index_file)
+            self.idx_to_kv = np.loadtxt(index_file, dtype=np.int)
+
+        for num_i in range(0, len(self.hdfs)):
+            if self.hdfs[num_i]:
+                self.hdfs[num_i].close()
+                self.hdfs[num_i] = None
+
+        if is_shuffle:
+            random.shuffle(self.idx_to_kv)  # random the order to stable the training
+
+        self.hdf = None
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.idx_to_kv)
+
+    def __del__(self):
+        for num_i in range(0, len(self.hdfs)):
+            if self.hdfs[num_i]:
+                self.hdfs[num_i].close()
+                self.hdfs[num_i] = None
+
+    def __getitem__(self, idx):
+        key, idx = self.idx_to_kv[idx]
+
+        self.hdf = h5py.File(os.path.join(self.path, self.sub_folder, self.selected_keys[key]), 'r', swmr=True)
+        assert self.hdf.swmr_mode
+
+        # Get face image
+        #<KeysViewHDF5 ['cam_index', 'face_gaze', 'face_head_pose', 'face_mat_norm', 'face_patch',     'frame_index']>
+        #               (10098, 1)    (10098, 2)     (10098, 2)     (10098, 3, 3)  (10098, 224, 224, 3)  (10098, 1)
+        #                       
+        image = self.hdf['face_patch'][idx, :]
+        image = image[:, :, [2, 1, 0]]  # from BGR to RGB
+        image = self.transform(image)
+
+        # Get labels
+        if self.is_load_label:
+            gaze_label = self.hdf['face_gaze'][idx, :]
+            gaze_label = gaze_label.astype('float')
+            return image, gaze_label
+        else:
+            return image
+
+
+################data loader for normalized data#############################
+class GazeDataset_normailzed(Dataset):
+    def __init__(self, dataset_path: str,
+                 opt: BaseOptions,
+                 keys_to_use: List[str] = None, 
+                 sub_folder='',
+                 camera_dir='',
+                 _3dmm_data_dir='',
+                 transform=None, 
+                 is_shuffle=True,
+                 index_file=None, 
+                 is_load_label=True,
+                 device = 'cpu',
+                 filter_view=False):
+        self.path = dataset_path
+        self.hdfs = {}
+        self.sub_folder = sub_folder
+        self.is_load_label = is_load_label
+        self.camera_loader = Camera_Loader(camera_dir)
+        self._3dmm_data_dir = _3dmm_data_dir
+        self.device = device
+        self.filter_view = filter_view
+        if opt is not None:
+            self.opt = opt
+        else:
+            print('option class required, input of opt is None!!')
+            raise
+        self.img_size = (self.opt.pred_img_size, self.opt.pred_img_size)
+        self.pred_img_size = self.opt.pred_img_size
+        self.featmap_size = self.opt.featmap_size
+        self.featmap_nc = self.opt.featmap_nc
+        
+
+        # assert len(set(keys_to_use) - set(all_keys)) == 0
+        # Select keys
+        # TODO: select only people with sufficient entries?
+        if self.filter_view:
+            ##filter out some severe camera view
+            dist_index = [(np.linalg.norm(self.camera_loader[i]['cam_translation']),i) for i in range(18)]
+            dist_index.sort()
+            self.valid_camera_index = {index for dist,index in dist_index[:10]}#keep camera with 10 least distance
+
+        self.selected_keys = [k for k in keys_to_use] #list of h5 file name
+        assert len(self.selected_keys) > 0
+
+        for num_i in range(0, len(self.selected_keys)):
+            file_path = os.path.join(self.path, self.sub_folder, self.selected_keys[num_i])
+            self.hdfs[num_i] = h5py.File(file_path, 'r', swmr=True)
+            # print('read file: ', os.path.join(self.path, self.selected_keys[num_i]))
+            assert self.hdfs[num_i].swmr_mode
+
+        # Construct mapping from full-data index to key and person-specific index
+        if index_file is None:
+            self.idx_to_kv = []
+            for num_i in range(0, len(self.selected_keys)):
+                hdfs_file = self.hdfs[num_i]
+                n = hdfs_file["face_patch"].shape[0]
+                self.idx_to_kv += [(num_i, i) for i in range(n)
+                                    if self.is_valid_data_sample(i,hdfs_file)] #our processed image if from 1
+        else:
+            print('load the file: ', index_file)
+            self.idx_to_kv = np.loadtxt(index_file, dtype=np.int)
+
+        for num_i in range(0, len(self.hdfs)):
+            if self.hdfs[num_i]:
+                self.hdfs[num_i].close()
+                self.hdfs[num_i] = None
+
+        if is_shuffle:
+            random.shuffle(self.idx_to_kv)  # random the order to stable the training
+
+        self.hdf = None
+        self.transform = transform
+    
+    def __len__(self):
+        return len(self.idx_to_kv)
+
+    def __del__(self):
+        for num_i in range(0, len(self.hdfs)):
+            if self.hdfs[num_i]:
+                self.hdfs[num_i].close()
+                self.hdfs[num_i] = None
+
+    def __getitem__(self, idx):
+        key, idx = self.idx_to_kv[idx]
+
+        self.hdf = h5py.File(os.path.join(self.path, self.sub_folder, self.selected_keys[key]), 'r', swmr=True)
+        assert self.hdf.swmr_mode
+
+        img_name = str(idx+1).zfill(6)+'.png'
+        img_path = os.path.join(self._3dmm_data_dir,img_name)
+
+        # Get face image
+        #<KeysViewHDF5 ['cam_index', 'face_gaze', 'face_head_pose', 'face_mat_norm', 'face_patch',     'frame_index']>
+        #               (10098, 1)    (10098, 2)     (10098, 2)     (10098, 3, 3)  (10098, 224, 224, 3)  (10098, 1)
+        #                       
+        image = self.hdf['face_patch'][idx, :] ##(224,224,3)
+        image = image[:, :, [2, 1, 0]]  # from BGR to RGB
+        if self.transform is not None:
+            image = self.transform(image)
+        image = image.astype(np.float32)/255.0
+
+        self.gt_img_size = image.shape[0]
+        if self.gt_img_size != self.pred_img_size:
+            image = cv2.resize(image, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_LINEAR)
+
+        mask_img = cv2.imread(img_path.replace(".png","_mask.png"), cv2.IMREAD_UNCHANGED).astype(np.uint8)
+        if mask_img.shape[0] != self.pred_img_size:
+            mask_img = cv2.resize(mask_img, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+
+        image[mask_img < 0.5] = 1.0
+        img_tensor = (torch.from_numpy(image).permute(2, 0, 1)).unsqueeze(0).to(self.device)#not sure RGB or BRG
+        mask_tensor = torch.from_numpy(mask_img[None, :, :]).unsqueeze(0).to(self.device)
+
+
+        
+        if self.is_load_label:
+            gaze_label = self.hdf['face_gaze'][idx, :]
+            gaze_label = gaze_label.astype('float')
+            gaze_tensor = (torch.from_numpy(gaze_label)).to(self.device)
+        else:
+            gaze_tensor = torch.tensor([None,None])
+
+        head_pose = self.hdf['face_head_pose'][idx, :]
+        head_pose = head_pose.astype('float')
+        head_pose = (torch.from_numpy(head_pose)).to(self.device)
+
+        camera_index = self.hdf['cam_index'][idx,:][0]
+        camera_parameter = self.camera_loader[camera_index-1]  ##ground truth camera info
+
+        self.load_3dmm_params(os.path.join(self._3dmm_data_dir,img_name.replace(".png","_nl3dmm.pkl")))
+
+        data_info = {
+                        'imgname' : img_name,
+                        'img_path': img_path,
+                        'img' : img_tensor,
+                        'gaze': gaze_tensor,  ##only available in training set
+                        'head_pose': head_pose,
+                        'camera_parameter': camera_parameter,
+                        '_3dmm': {'cam_info':self.cam_info,
+                                  'code_info':self.code_info},
+                        'img_mask' : mask_tensor
+                    }
+        return data_info
+
+    def is_valid_data_sample(self,i,hdfs_file):
+        mm3d_param_exist = os.path.exists(os.path.join(self._3dmm_data_dir,str(i+1).zfill(6) + "_nl3dmm.pkl"))
+        
+        mask_file = os.path.join(self._3dmm_data_dir,str(i+1).zfill(6) + "_mask.png")
+        mask_img = cv2.imread(mask_file, cv2.IMREAD_UNCHANGED).astype(np.uint8)
+        valid_mask_img = bool((mask_img>125).any())
+
+        if self.filter_view:
+            camera_index  = hdfs_file['cam_index'][i,:]
+            is_valid_camera = (camera_index[0] in self.valid_camera_index)
+        else:
+            is_valid_camera = True
+
+
+        return mm3d_param_exist & valid_mask_img & is_valid_camera
+
+    def load_3dmm_params(self,para_3dmm_path):
+        # load init codes from the results generated by solving 3DMM rendering opt.
+        with open(para_3dmm_path, "rb") as f: nl3dmm_para_dict = pkl.load(f)
+        base_code = nl3dmm_para_dict["code"].detach().unsqueeze(0).to(self.device)
+        
+        base_iden = base_code[:, :self.opt.iden_code_dims]
+        base_expr = base_code[:, self.opt.iden_code_dims:self.opt.iden_code_dims + self.opt.expr_code_dims]
+        base_text = base_code[:, self.opt.iden_code_dims + self.opt.expr_code_dims:self.opt.iden_code_dims 
+                                                            + self.opt.expr_code_dims + self.opt.text_code_dims]
+        base_illu = base_code[:, self.opt.iden_code_dims + self.opt.expr_code_dims + self.opt.text_code_dims:]
+        
+        self.base_c2w_Rmat = nl3dmm_para_dict["c2w_Rmat"].detach().unsqueeze(0)
+        self.base_c2w_Tvec = nl3dmm_para_dict["c2w_Tvec"].detach().unsqueeze(0).unsqueeze(-1)
+        self.base_w2c_Rmat = nl3dmm_para_dict["w2c_Rmat"].detach().unsqueeze(0)
+        self.base_w2c_Tvec = nl3dmm_para_dict["w2c_Tvec"].detach().unsqueeze(0).unsqueeze(-1)
+
+        temp_inmat = nl3dmm_para_dict["inmat"].detach().unsqueeze(0)
+        temp_inmat[:, :2, :] *= (self.featmap_size / self.gt_img_size)
+        
+        temp_inv_inmat = torch.zeros_like(temp_inmat)
+        temp_inv_inmat[:, 0, 0] = 1.0 / temp_inmat[:, 0, 0]
+        temp_inv_inmat[:, 1, 1] = 1.0 / temp_inmat[:, 1, 1]
+        temp_inv_inmat[:, 0, 2] = -(temp_inmat[:, 0, 2] / temp_inmat[:, 0, 0])
+        temp_inv_inmat[:, 1, 2] = -(temp_inmat[:, 1, 2] / temp_inmat[:, 1, 1])
+        temp_inv_inmat[:, 2, 2] = 1.0
+        
+        #self.temp_inmat = temp_inmat
+        self.temp_inv_inmat = temp_inv_inmat
+
+        self.cam_info = {
+            "batch_Rmats": self.base_c2w_Rmat.to(self.device),
+            "batch_Tvecs": self.base_c2w_Tvec.to(self.device),
+            "batch_inv_inmats": self.temp_inv_inmat.to(self.device)
+        }
+
+        self.code_info = {
+            "base_iden" : base_iden,
+            "base_expr" : base_expr,
+            "base_text" : base_text,
+            "base_illu" : base_illu,
+            "inmat" : temp_inmat,
+            "inv_inmat" : temp_inv_inmat
+        }
+
+
+################data loader for raw data#############################
 class XGaze_raw(Dataset):
     def __init__(self,dataset_path: str,frame_selected:list,subject_selected:list,annotation_path:str,device,opt:BaseOptions,is_shuffle=True):
         self.path = dataset_path
@@ -361,11 +594,38 @@ class XGaze_raw(Dataset):
 
 
 if __name__=='__main__':
-    torch.multiprocessing.set_start_method('spawn')# good solution !!!!
-    Dataloader = get_data_loader('/home/colinqian/Project/HeadNeRF/headnerf/XGaze_utils/playground',
-                    '/home/colinqian/Project/HeadNeRF/headnerf/XGaze_utils',
-                    batch_size=4,num_workers=0)
-    for iter,batch in enumerate(Dataloader):
+    # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
+    # Dataloader = get_data_loader('/home/colinqian/Project/HeadNeRF/headnerf/XGaze_utils/playground',
+    #                 '/home/colinqian/Project/HeadNeRF/headnerf/XGaze_utils',
+    #                 batch_size=4,num_workers=0)
+    # for iter,batch in enumerate(Dataloader):
+    #     import ipdb;
+    #     ipdb.set_trace()
+    #     pass
+
+
+    #################test normalized data#####################
+    opt = BaseOptions()
+    dataset_config={
+        'dataset_path': './XGaze_utils/xgaze/',
+        'opt': opt,
+        'keys_to_use':['subject0000.h5'], 
+        'sub_folder':'train',
+        'camera_dir':'./XGaze_utils/xgaze/camera_parameters',
+        '_3dmm_data_dir':'./XGaze_utils/normalized_250_data',
+        'transform':None, 
+        'is_shuffle':True,
+        'index_file':None, 
+        'is_load_label':True,
+        'device': 'cpu'
+
+    }
+    gaze_dataset = GazeDataset_normailzed(**dataset_config)
+    data_loader = DataLoader(gaze_dataset, batch_size=8, num_workers=4)
+    for iter,batch in enumerate(data_loader):
         import ipdb;
         ipdb.set_trace()
         pass
+
+
+

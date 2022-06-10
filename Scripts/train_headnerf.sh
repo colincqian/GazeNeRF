@@ -1,0 +1,1 @@
+python train_headnerf.py --headnerf_options "TrainedModels/model_Reso32HR.pth"

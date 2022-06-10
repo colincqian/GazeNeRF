@@ -1,3 +1,4 @@
+from dis import code_info
 import cv2
 import torch
 import torch.nn.functional as F
@@ -126,6 +127,7 @@ class HeadNeRFLossUtils(object):
         bg_loss = torch.mean((bg_img - bg_value) * (bg_img - bg_value))
         
         res_img = data_dict["merge_img"]
+        res_img = torch.nan_to_num(res_img, nan=0.0)
         head_mask_c3b = head_mask_c1b.expand(-1, 3, -1, -1)
         head_loss = F.mse_loss(res_img[head_mask_c3b], gt_rgb[head_mask_c3b])
 
@@ -170,11 +172,12 @@ class HeadNeRFLossUtils(object):
             total_loss += 0.001 * loss_dict["delta_eular"] + 0.001 * loss_dict["delta_tvec"]
 
         # code loss
-        loss_dict.update(self.calc_code_loss(opt_code_dict))        
-        total_loss += 0.001 * loss_dict["iden_code"] + \
-                      1.0 * loss_dict["expr_code"] + \
-                      0.001 * loss_dict["appea_code"] + \
-                      0.01 * loss_dict["bg_code"]
+        if opt_code_dict is not None:
+            loss_dict.update(self.calc_code_loss(opt_code_dict))        
+            total_loss += 0.001 * loss_dict["iden_code"] + \
+                        1.0 * loss_dict["expr_code"] + \
+                        0.001 * loss_dict["appea_code"] + \
+                        0.01 * loss_dict["bg_code"]
 
         loss_dict["total_loss"] = total_loss
         return loss_dict

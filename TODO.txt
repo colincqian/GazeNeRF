@@ -1,0 +1,6 @@
+    #TODO:
+    ###1. Add test and visualization part for the training script
+    ###2. Consider faster way to process 3dmm data
+    ###3. Unify config file format
+    ###4. Add eye gaze encoding in the process
+    ###5. find ways to filter out failure case in 3DMM model and masking so that prevent mask checking in data loader contruction
