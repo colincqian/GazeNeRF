@@ -18,6 +18,7 @@ from NetWorks.HeadNeRFNet import HeadNeRFNet
 from Utils.HeadNeRFLossUtils import HeadNeRFLossUtils
 from Utils.RenderUtils import RenderUtils
 from tqdm import tqdm
+import cv2
 
 class Trainer(object):
     def __init__(self,config,data_loader):
@@ -62,6 +63,7 @@ class Trainer(object):
 
         #build model
         if self.headnerf_options:
+            
             check_dict = torch.load(self.headnerf_options, map_location=torch.device("cpu"))
 
             para_dict = check_dict["para"]
@@ -69,6 +71,7 @@ class Trainer(object):
 
             self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False)        
             self.model.load_state_dict(check_dict["net"])
+            print(f'load model parameter from {self.headnerf_options}')
         else:
             self.opt = BaseOptions()
             self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False)        
@@ -96,8 +99,8 @@ class Trainer(object):
         self.loss_utils = HeadNeRFLossUtils(device=self.device)
         self.render_utils = RenderUtils(view_num=45, device=self.device, opt=self.opt)
         
-        self.xy = self.render_utils.ray_xy.to(self.device)
-        self.uv = self.render_utils.ray_uv.to(self.device)
+        self.xy = self.render_utils.ray_xy.to(self.device).expand(self.batch_size,-1,-1)
+        self.uv = self.render_utils.ray_uv.to(self.device).expand(self.batch_size,-1,-1)
     
     def train(self):
         for epoch in range(self.start_epoch,self.epochs):
@@ -178,9 +181,12 @@ class Trainer(object):
             if isnan(batch_loss_dict["head_loss"].item()):
                 import ipdb
                 ipdb.set_trace()
-            loop_bar.set_description("Opt, Loss: %.6f  " % batch_loss_dict["head_loss"].item())          
-    
-    
+            loop_bar.set_description("Opt, Loss: %.6f  " % batch_loss_dict["head_loss"].item())  
+
+            if iter % self.print_freq == 0 and iter != 0:
+                self._display_current_rendered_image(pred_dict,gt_img)
+
+
 
     def save_checkpoint(self, state, add=None):
         """
@@ -212,4 +218,16 @@ class Trainer(object):
             "[*] Loaded {} checkpoint @ epoch {}".format(
                 input_file_path, ckpt['epoch'])
         )
+
+    def _display_current_rendered_image(self,pred_dict,img_tensor):
+        coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
+        coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+        gt_img = (img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+        res_img = np.concatenate([gt_img, coarse_fg_rgb], axis=1)
+
+
+        cv2.imshow('current rendering', res_img)
+        cv2.waitKey(0) 
+        #closing all open windows 
+        cv2.destroyAllWindows() 
 
