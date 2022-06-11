@@ -86,7 +86,7 @@ class FittingImage(object):
         base_code = nl3dmm_para_dict["code"].detach().unsqueeze(0).to(self.device)
         
         #ablation on 3DMM model codes
-        IGNORE_3DMM_CODE=True
+        IGNORE_3DMM_CODE=False
         if IGNORE_3DMM_CODE:
             base_code_zero = torch.zeros_like(base_code)
             base_code = base_code_zero
@@ -261,8 +261,7 @@ class FittingImage(object):
         for iter_ in loop_bar:
             with torch.set_grad_enabled(True):
                 code_info, opt_code_dict, cam_info, delta_cam_info = self.build_code_and_cam()
-                import ipdb
-                ipdb.set_trace()
+
                 pred_dict = self.net( "test", self.xy, self.uv,  **code_info, **cam_info)
                 #input: xy: torch.Size([1, 2, 1024]),   uv:torch.Size([1, 1024, 2]) 
                 #code info: appea: torch.Size([1, 127]), shape:torch.Size([1, 179])
@@ -346,10 +345,20 @@ class FittingImage(object):
         self.perform_fitting()
         self.save_res(base_name, save_root)
         
+    def _display_current_rendered_image(self,pred_dict,img_tensor):
+        coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
+        coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+        gt_img = (img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+        res_img = np.concatenate([gt_img, coarse_fg_rgb], axis=1)
+
+
+        cv2.imshow('current rendering', res_img)
+        cv2.waitKey(0) 
+        #closing all open windows 
+        cv2.destroyAllWindows() 
+
 
 if __name__ == "__main__":
-    import warnings
-    warnings.filterwarnings("error")
     torch.manual_seed(45)  # cpu
     torch.cuda.manual_seed(55)  # gpu
     np.random.seed(65)  # numpy
