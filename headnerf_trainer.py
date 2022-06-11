@@ -231,8 +231,8 @@ class Trainer(object):
         log_path = './logs/temp_image/'
         if not os.path.exists(log_path):
             os.mkdir(log_path)
-        cv2.imwrite(os.path.join(log_path,str(iter).zfill(6) + 'iter_image.png'))
-        print('Save temporary rendered image to {log_path}')
+        cv2.imwrite(os.path.join(log_path,str(iter).zfill(6) + 'iter_image.png'),res_img)
+        print(f'Save temporary rendered image to {log_path}')
 
         # cv2.imshow('current rendering', res_img)
         # cv2.waitKey(0) 

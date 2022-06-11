@@ -518,7 +518,7 @@ class XGaze_raw(Dataset):
                         continue
 
                     img = cv2.imread(self.img_path)
-                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    #img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                     img = img.astype(np.float32)/255.0
                     self.gt_img_size = img.shape[0]
                     if self.gt_img_size != self.pred_img_size:
