@@ -71,12 +71,12 @@ class Trainer(object):
             para_dict = check_dict["para"]
             self.opt = BaseOptions(para_dict)
 
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False)        
+            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=False)        
             self.model.load_state_dict(check_dict["net"])
             print(f'load model parameter from {self.headnerf_options}')
         else:
             self.opt = BaseOptions()
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False)        
+            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=False)        
         
         ##device setting
         if self.use_gpu and torch.cuda.device_count() > 0:
@@ -138,7 +138,7 @@ class Trainer(object):
         base_illu = mm3d_param['code_info']['base_illu'].squeeze(1)
 
         shape_code = torch.cat([base_iden, base_expr], dim=-1)
-        appea_code = torch.cat([base_text, base_illu], dim=-1) 
+        appea_code = torch.cat([base_text, base_illu], dim=-1) ##test
         
 
         if self.use_gt_camera:
@@ -167,27 +167,27 @@ class Trainer(object):
         loop_bar = tqdm(enumerate(data_loader), leave=False, total=len(data_loader))
         for iter,data_info in loop_bar:
 
-            try:
-                with torch.set_grad_enabled(True):
-                    code_info,cam_info = self.build_code_and_cam_info(data_info)
+            #try:
+            with torch.set_grad_enabled(True):
+                code_info,cam_info = self.build_code_and_cam_info(data_info)
 
-                    pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
+                pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
 
-                    gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1)
+                gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1)
 
-                    batch_loss_dict = self.loss_utils.calc_total_loss(
-                        delta_cam_info=None, opt_code_dict=None, pred_dict=pred_dict, 
-                        gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device)
-                    )
-                self.optimizer.zero_grad()
-                batch_loss_dict["total_loss"].backward()
-                self.optimizer.step()
-                if isnan(batch_loss_dict["head_loss"].item()):
-                    import warnings
-                    warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-                loop_bar.set_description("Opt, Loss: %.6f  " % batch_loss_dict["head_loss"].item())  
-            except:
-                print(f'batch bug occurs!xy_size:{self.xy.size()},uv_size:{self.uv.size()}')
+                batch_loss_dict = self.loss_utils.calc_total_loss(
+                    delta_cam_info=None, opt_code_dict=None, pred_dict=pred_dict, 
+                    gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device)
+                )
+            self.optimizer.zero_grad()
+            batch_loss_dict["total_loss"].backward()
+            self.optimizer.step()
+            if isnan(batch_loss_dict["head_loss"].item()):
+                import warnings
+                warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
+            loop_bar.set_description("Opt, Loss: %.6f  " % batch_loss_dict["head_loss"].item())  
+            # except:
+            #     print(f'batch bug occurs!xy_size:{self.xy.size()},uv_size:{self.uv.size()}')
             if iter % self.print_freq == 0 and iter != 0:
                 self._display_current_rendered_image(pred_dict,gt_img,iter)
                 

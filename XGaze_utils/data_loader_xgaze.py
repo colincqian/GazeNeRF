@@ -137,7 +137,7 @@ def get_data_loader(   mode='train',
     
     XGaze_dataset = GazeDataset_normailzed(**dataset_config)
 
-    return DataLoader(XGaze_dataset,batch_size=batch_size,num_workers=num_workers)
+    return DataLoader(XGaze_dataset,batch_size=batch_size,num_workers=num_workers,drop_last=True)
 
 
 #########put this in config file after all testing########################
@@ -347,7 +347,7 @@ class GazeDataset_normailzed(Dataset):
         #image = self.hdf['face_patch'][idx, :] ##(224,224,3)
         image = cv2.imread(img_path)##(250,250,3)
 
-        image = image[:, :, [2, 1, 0]]  # from BGR to RGB
+        #image = image[:, :, [2, 1, 0]]  # from BGR to RGB
         if self.transform is not None:
             image = self.transform(image)
         image = image.astype(np.float32)/255.0
@@ -362,6 +362,7 @@ class GazeDataset_normailzed(Dataset):
 
         image[mask_img < 0.5] = 1.0
         img_tensor = (torch.from_numpy(image).permute(2, 0, 1)).unsqueeze(0).to(self.device)#not sure RGB or BRG
+        #img_tensor = (torch.from_numpy(image)).unsqueeze(0).to(self.device)#not sure RGB or BRG
         mask_tensor = torch.from_numpy(mask_img[None, :, :]).unsqueeze(0).to(self.device)
 
         
