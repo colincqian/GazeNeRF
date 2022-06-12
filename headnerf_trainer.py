@@ -110,7 +110,7 @@ class Trainer(object):
                 '\nEpoch: {}/{} - base LR: {:.6f}'.format(
                     epoch + 1, self.epochs, self.lr)
             )
-
+            self.cur_epoch = epoch
             #Training
             self.model.train()
             self.train_one_epoch(epoch,self.train_loader)
@@ -166,28 +166,32 @@ class Trainer(object):
     def train_one_epoch(self, epoch, data_loader, is_train=True):
         loop_bar = tqdm(enumerate(data_loader), leave=False, total=len(data_loader))
         for iter,data_info in loop_bar:
-            with torch.set_grad_enabled(True):
-                code_info,cam_info = self.build_code_and_cam_info(data_info)
 
-                pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
+            try:
+                with torch.set_grad_enabled(True):
+                    code_info,cam_info = self.build_code_and_cam_info(data_info)
 
-                gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1)
+                    pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
 
-                batch_loss_dict = self.loss_utils.calc_total_loss(
-                    delta_cam_info=None, opt_code_dict=None, pred_dict=pred_dict, 
-                    gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device)
-                )
-            self.optimizer.zero_grad()
-            batch_loss_dict["total_loss"].backward()
-            self.optimizer.step()
-            if isnan(batch_loss_dict["head_loss"].item()):
-                import warnings
-                warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-            loop_bar.set_description("Opt, Loss: %.6f  " % batch_loss_dict["head_loss"].item())  
+                    gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1)
 
+                    batch_loss_dict = self.loss_utils.calc_total_loss(
+                        delta_cam_info=None, opt_code_dict=None, pred_dict=pred_dict, 
+                        gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device)
+                    )
+                self.optimizer.zero_grad()
+                batch_loss_dict["total_loss"].backward()
+                self.optimizer.step()
+                if isnan(batch_loss_dict["head_loss"].item()):
+                    import warnings
+                    warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
+                loop_bar.set_description("Opt, Loss: %.6f  " % batch_loss_dict["head_loss"].item())  
+            except:
+                print(f'batch bug occurs!xy_size:{self.xy.size()},uv_size:{self.uv.size()}')
             if iter % self.print_freq == 0 and iter != 0:
                 self._display_current_rendered_image(pred_dict,gt_img,iter)
-
+                
+            
 
 
     def save_checkpoint(self, state, add=None):
@@ -228,7 +232,7 @@ class Trainer(object):
         res_img = np.concatenate([gt_img, coarse_fg_rgb], axis=1)
 
         
-        log_path = './logs/temp_image/'
+        log_path = './logs/temp_image/' + 'epoch' + str(self.cur_epoch)
         if not os.path.exists(log_path):
             os.mkdir(log_path)
         cv2.imwrite(os.path.join(log_path,str(iter).zfill(6) + 'iter_image.png'),res_img)
