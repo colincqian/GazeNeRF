@@ -71,12 +71,12 @@ class Trainer(object):
             para_dict = check_dict["para"]
             self.opt = BaseOptions(para_dict)
 
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False)        
+            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=False)        
             self.model.load_state_dict(check_dict["net"])
             print(f'load model parameter from {self.headnerf_options}')
         else:
             self.opt = BaseOptions()
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False)        
+            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=False)        
         
         ##device setting
         if self.use_gpu and torch.cuda.device_count() > 0:
@@ -110,7 +110,7 @@ class Trainer(object):
                 '\nEpoch: {}/{} - base LR: {:.6f}'.format(
                     epoch + 1, self.epochs, self.lr)
             )
-
+            self.cur_epoch = epoch
             #Training
             self.model.train()
             self.train_one_epoch(epoch,self.train_loader)
@@ -138,7 +138,7 @@ class Trainer(object):
         base_illu = mm3d_param['code_info']['base_illu'].squeeze(1)
 
         shape_code = torch.cat([base_iden, base_expr], dim=-1)
-        appea_code = torch.cat([base_text, base_illu], dim=-1) 
+        appea_code = torch.cat([base_text, base_illu], dim=-1) ##test
         
 
         if self.use_gt_camera:
@@ -166,6 +166,8 @@ class Trainer(object):
     def train_one_epoch(self, epoch, data_loader, is_train=True):
         loop_bar = tqdm(enumerate(data_loader), leave=False, total=len(data_loader))
         for iter,data_info in loop_bar:
+
+            #try:
             with torch.set_grad_enabled(True):
                 code_info,cam_info = self.build_code_and_cam_info(data_info)
 
@@ -184,10 +186,12 @@ class Trainer(object):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
             loop_bar.set_description("Opt, Loss: %.6f  " % batch_loss_dict["head_loss"].item())  
-
+            # except:
+            #     print(f'batch bug occurs!xy_size:{self.xy.size()},uv_size:{self.uv.size()}')
             if iter % self.print_freq == 0 and iter != 0:
                 self._display_current_rendered_image(pred_dict,gt_img,iter)
-
+                
+            
 
 
     def save_checkpoint(self, state, add=None):
@@ -228,7 +232,7 @@ class Trainer(object):
         res_img = np.concatenate([gt_img, coarse_fg_rgb], axis=1)
 
         
-        log_path = './logs/temp_image/'
+        log_path = './logs/temp_image/' + 'epoch' + str(self.cur_epoch)
         if not os.path.exists(log_path):
             os.mkdir(log_path)
         cv2.imwrite(os.path.join(log_path,str(iter).zfill(6) + 'iter_image.png'),res_img)
