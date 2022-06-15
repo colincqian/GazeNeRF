@@ -5,3 +5,4 @@
     ###4. Add eye gaze encoding in the process
     ###5. find ways to filter out failure case in 3DMM model and masking so that prevent mask checking in data loader contruction
     ###6 masking is somehow incomplete
+    ###7 transforming data into some more compact form (h5py file)

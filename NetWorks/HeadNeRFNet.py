@@ -48,7 +48,7 @@ class HeadNeRFNet(nn.Module):
         vp_channels = self.base_shape_code_dims
         vp_channels += self.vp_n_freqs * 6 + 3 if self.include_input_for_vp_embeder else self.vp_n_freqs * 6
         if self.include_gaze:
-            vp_channels += 100
+            vp_channels += 2
         
         self.vp_encoder = Embedder(N_freqs=self.vp_n_freqs, include_input=self.include_input_for_vp_embeder)
         
@@ -57,6 +57,9 @@ class HeadNeRFNet(nn.Module):
             tv = self.vd_n_freqs * 6 + 3 if self.include_input_for_vd_embeder else self.vd_n_freqs * 6
             vd_channels += tv
             self.vd_encoder = Embedder(N_freqs=self.vd_n_freqs, include_input=self.include_input_for_vd_embeder)
+        if self.include_gaze:
+            vd_channels += 2
+                
         
         self.sample_func = GenSamplePoints(self.opt)
         

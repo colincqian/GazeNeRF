@@ -271,6 +271,8 @@ class FittingNL3DMM(object):
             
             try:
                 temp_data = self.data_utils.load_batch_sample(idx_list)
+                import ipdb
+                ipdb.set_trace()
                 self.opt_batch_data(**temp_data)
             except:
                 print('skip data')

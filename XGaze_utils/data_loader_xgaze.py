@@ -322,6 +322,8 @@ class GazeDataset_normailzed(Dataset):
         self.hdf = None
         self.transform = transform
 
+        #self.debug_iter(0)
+
     def __len__(self):
         return len(self.idx_to_kv)
 
@@ -466,7 +468,9 @@ class GazeDataset_normailzed(Dataset):
 
         mask_img = cv2.imread(img_path.replace(".png","_mask.png"), cv2.IMREAD_UNCHANGED).astype(np.uint8)
         
-
+        import ipdb 
+        ipdb.set_trace()
+        self.load_3dmm_params(os.path.join(self._3dmm_data_dir,img_name.replace(".png","_nl3dmm.pkl")))
 
         # Get face image
         #<KeysViewHDF5 ['cam_index', 'face_gaze', 'face_head_pose', 'face_mat_norm', 'face_patch',     'frame_index']>

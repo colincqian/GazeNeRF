@@ -41,6 +41,7 @@ class Trainer(object):
             print(f'Load {self.num_test} data samples')
         self.batch_size = config.batch_size
         self.use_gt_camera = config.use_gt_camera
+        self.include_eye_gaze = config.include_eye_gaze
 
         # training params
         self.epochs = config.epochs  # the total epoch to train
@@ -48,6 +49,8 @@ class Trainer(object):
         self.lr = config.init_lr
         self.lr_patience = config.lr_patience
         self.lr_decay_factor = config.lr_decay_factor
+        self.resume = config.resume
+
 
         # misc params
         self.use_gpu = config.use_gpu
@@ -76,7 +79,8 @@ class Trainer(object):
             print(f'load model parameter from {self.headnerf_options}')
         else:
             self.opt = BaseOptions()
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=False)        
+            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=self.include_eye_gaze)   
+            print(f'Train model from scratch, set include_eye gaze to be {self.include_eye_gaze}')     
         
         ##device setting
         if self.use_gpu and torch.cuda.device_count() > 0:
@@ -97,6 +101,9 @@ class Trainer(object):
 
         self._build_tool_funcs()
 
+        if self.resume:
+            self.load_checkpoint(self.resume)
+            
     def _build_tool_funcs(self):
         self.loss_utils = HeadNeRFLossUtils(device=self.device)
         self.render_utils = RenderUtils(view_num=45, device=self.device, opt=self.opt)
@@ -116,11 +123,17 @@ class Trainer(object):
             self.train_one_epoch(epoch,self.train_loader)
 
             add_file_name = 'epoch_' + str(epoch)
+
+            para_dict={}
+            para_dict["featmap_size"] = self.opt.featmap_size
+            para_dict["featmap_nc"] = self.opt.featmap_nc 
+            para_dict["pred_img_size"] = self.opt.pred_img_size
             self.save_checkpoint(
                 {'epoch': epoch + 1,
-                 'model_state': self.model.state_dict(),
+                 'net': self.model.state_dict(),
                  'optim_state': self.optimizer.state_dict(),
-                 'scheule_state': self.scheduler.state_dict()
+                 'scheule_state': self.scheduler.state_dict(),
+                 'para':para_dict
                  }, add=add_file_name
             )
 
@@ -130,15 +143,15 @@ class Trainer(object):
     
     def build_code_and_cam_info(self,data_info):
 
-
+        face_gaze = data_info['gaze'].float()
         mm3d_param = data_info['_3dmm']
         base_iden = mm3d_param['code_info']['base_iden'].squeeze(1)
         base_expr = mm3d_param['code_info']['base_expr'].squeeze(1)
         base_text = mm3d_param['code_info']['base_text'].squeeze(1)
         base_illu = mm3d_param['code_info']['base_illu'].squeeze(1)
 
-        shape_code = torch.cat([base_iden, base_expr], dim=-1)
-        appea_code = torch.cat([base_text, base_illu], dim=-1) ##test
+        shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
+        appea_code = torch.cat([base_text, base_illu,face_gaze], dim=-1) ##test
         
 
         if self.use_gt_camera:
@@ -215,7 +228,7 @@ class Trainer(object):
         ckpt = torch.load(input_file_path)
 
         # load variables from checkpoint
-        self.model.load_state_dict(ckpt['model_state'], strict=is_strict)
+        self.model.load_state_dict(ckpt['net'], strict=is_strict)
         self.optimizer.load_state_dict(ckpt['optim_state'])
         self.scheduler.load_state_dict(ckpt['scheule_state'])
         self.start_epoch = ckpt['epoch'] - 1

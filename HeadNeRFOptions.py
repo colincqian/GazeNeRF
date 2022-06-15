@@ -99,10 +99,16 @@ misc_arg.add_argument('--ckpt_dir', type=str, default='./logs/ckpt',
                       help='Directory in which to save model checkpoints')
 
 misc_arg.add_argument('--headnerf_options', type=str, default='',
-                      help='File path that can load headnerf options and model parameters')
+                      help='File path that can load headnerf options (Baseoption class) and model parameters')
 
 misc_arg.add_argument('--use_gt_camera', type=str2bool, default=False,
                       help="Whether use gt camera parameter in ETH_XGaze")
+
+misc_arg.add_argument('--include_eye_gaze', type=str2bool, default=False,
+                    help="Whether to include eye gaze as additional input to headnerf")
+
+misc_arg.add_argument('--resume', type=str, default='',
+                      help='whether to resume training, load saved ckpt')                   
 
 def get_config():
     config, unparsed = parser.parse_known_args()
