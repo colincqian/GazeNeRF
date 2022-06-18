@@ -50,6 +50,24 @@ class GenHeadMask(object):
         target = cv2.bitwise_and(cur_mask,cur_mask, mask=mask)
         return target
 
+    def _extend_eye_mask(self,mask,size=(20,20)):
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,size)
+        dilated_mask = cv2.dilate(mask, kernel, iterations=3)
+        return dilated_mask
+
+    def extrace_eye_mask(self,parsing,mask_extend_size=(20,20)):
+        eye_mask = np.zeros((parsing.shape[0],parsing.shape[1]))
+        for pi in [4,5]:#parsing index for eye
+            index = np.where(parsing == pi)
+            eye_mask[index[0], index[1]] = 255
+        eye_mask = eye_mask.astype(np.uint8)
+
+        eye_mask = self._extend_eye_mask(eye_mask)
+
+        return eye_mask
+
+
+
     def main_process(self, img_dir,*args):
         img_path_list = [x for x in glob("%s/*.png" % img_dir) if "mask" not in x]  
         if len(img_path_list) == 0:
@@ -59,9 +77,14 @@ class GenHeadMask(object):
         loop_bar = tqdm(img_path_list)
         loop_bar.set_description("Generate head masks")
         for img_path in loop_bar:
-            save_path = img_path[:-4] + "_mask_eye.png"
-            bgr_img = cv2.imread(img_path)
-            img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
+            save_path = img_path[:-4] + "_mask.png"
+            eye_mask_path = img_path[:-4] + "_mask_eye.png"
+            img = cv2.imread(img_path)
+            width,height,_ = img.shape
+            vis_image = img.copy()
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = cv2.resize(img,(512,512))  #resize for better segmentation of eyes
+            temp_image =img.copy()
             img = self.to_tensor(img)
             img = img.unsqueeze(0)
             img = img.to(self.device)
@@ -71,29 +94,28 @@ class GenHeadMask(object):
 
             res = out.squeeze(0).cpu().numpy().argmax(0)
             res = res.astype(np.uint8)
+            eye_mask = self.extrace_eye_mask(res.copy())#extract eye segmentation
             cv2.LUT(res, self.lut, res)
             
             res = correct_hair_mask(res)
 
             res[res != 0] = 255
+            res = self.green_screen_filtering(temp_image,res)
+
+            eye_mask = np.bitwise_and(res,eye_mask)#filter out infeasible eye seg
+
+            eye_mask = cv2.resize(eye_mask,(width,height))
+            res = cv2.resize(res,(width,height))
 
 
-
-
-            # bgr_img[res!=255] = 0
-            # cv2.imshow('current image', bgr_img)
+            # cv2.imshow('current mask', vis_image)
             # cv2.waitKey(0) 
-
-
-            res = self.green_screen_filtering(bgr_img,res)
-
-
-            # cv2.imshow('current mask', res)
+            # vis_image[res!=255] = 0
+            # cv2.imshow('masked image', res)
             # cv2.waitKey(0) 
-            # bgr_img[res!=255] = 0
-            # cv2.imshow('masked image', bgr_img)
+            # vis_image[eye_mask!=255] = 0
+            # cv2.imshow('masked image', eye_mask)
             # cv2.waitKey(0) 
-            # # # #closing all open windows 
 
             # cv2.destroyAllWindows() 
             # temp_img = bgr_img.copy()
@@ -101,6 +123,7 @@ class GenHeadMask(object):
             
             # res = np.concatenate([bgr_img, temp_img], axis=1)
             cv2.imwrite(save_path, res)
+            cv2.imwrite(eye_mask_path, eye_mask)
             
 
 
