@@ -359,13 +359,19 @@ class GazeDataset_normailzed(Dataset):
             image = cv2.resize(image, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_LINEAR)
 
         mask_img = cv2.imread(img_path.replace(".png","_mask.png"), cv2.IMREAD_UNCHANGED).astype(np.uint8)
+        eye_mask_img = cv2.imread(img_path.replace(".png","_mask_eye.png"), cv2.IMREAD_UNCHANGED).astype(np.uint8)
         if mask_img.shape[0] != self.pred_img_size:
             mask_img = cv2.resize(mask_img, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+
+        if eye_mask_img.shape[0] != self.pred_img_size:
+            eye_mask_img = cv2.resize(eye_mask_img, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+        
 
         image[mask_img < 0.5] = 1.0
         img_tensor = (torch.from_numpy(image).permute(2, 0, 1)).unsqueeze(0).to(self.device)#not sure RGB or BRG
         #img_tensor = (torch.from_numpy(image)).unsqueeze(0).to(self.device)#not sure RGB or BRG
         mask_tensor = torch.from_numpy(mask_img[None, :, :]).unsqueeze(0).to(self.device)
+        eye_mask_tensor = torch.from_numpy(eye_mask_img[None, :, :]).unsqueeze(0).to(self.device)
 
         
         if self.is_load_label:
@@ -393,7 +399,8 @@ class GazeDataset_normailzed(Dataset):
                         'camera_parameter': camera_parameter,
                         '_3dmm': {'cam_info':self.cam_info,
                                   'code_info':self.code_info},
-                        'img_mask' : mask_tensor
+                        'img_mask' : mask_tensor,
+                        'eye_mask' : eye_mask_tensor
                     }
         return data_info
 

@@ -153,7 +153,7 @@ class HeadNeRFLossUtils(object):
         return res
     
 
-    def calc_total_loss(self, delta_cam_info, opt_code_dict, pred_dict, gt_rgb, mask_tensor):
+    def calc_total_loss(self, delta_cam_info, opt_code_dict, pred_dict, gt_rgb, mask_tensor,eye_mask_tensor=None):
         
         # assert delta_cam_info is not None
         head_mask = (mask_tensor >= 0.5)  
@@ -178,6 +178,15 @@ class HeadNeRFLossUtils(object):
                         1.0 * loss_dict["expr_code"] + \
                         0.001 * loss_dict["appea_code"] + \
                         0.01 * loss_dict["bg_code"]
+
+        #eye mask loss
+        if eye_mask_tensor is not None:
+            eye_mask = (eye_mask_tensor >= 0.5)  
+            noneye_mask = (eye_mask_tensor < 0.5) 
+            loss_dict_eye = self.calc_data_loss(coarse_data_dict, gt_rgb, eye_mask, noneye_mask)
+            loss_dict['eye_loss'] = loss_dict_eye['head_loss']
+            total_loss += loss_dict['eye_loss'] * 10
+
 
         loss_dict["total_loss"] = total_loss
         return loss_dict

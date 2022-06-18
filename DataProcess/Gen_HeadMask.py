@@ -94,7 +94,7 @@ class GenHeadMask(object):
 
             res = out.squeeze(0).cpu().numpy().argmax(0)
             res = res.astype(np.uint8)
-            eye_mask = self.extrace_eye_mask(res.copy())#extract eye segmentation
+            eye_mask = self.extrace_eye_mask(res)#extract eye segmentation
             cv2.LUT(res, self.lut, res)
             
             res = correct_hair_mask(res)
@@ -108,16 +108,16 @@ class GenHeadMask(object):
             res = cv2.resize(res,(width,height))
 
 
-            # cv2.imshow('current mask', vis_image)
-            # cv2.waitKey(0) 
-            # vis_image[res!=255] = 0
-            # cv2.imshow('masked image', res)
-            # cv2.waitKey(0) 
-            # vis_image[eye_mask!=255] = 0
-            # cv2.imshow('masked image', eye_mask)
-            # cv2.waitKey(0) 
+            cv2.imshow('current mask', vis_image)
+            cv2.waitKey(0) 
+            vis_image[res!=255] = 0
+            cv2.imshow('masked image', res)
+            cv2.waitKey(0) 
+            vis_image[eye_mask!=255] = 0
+            cv2.imshow('masked image', eye_mask)
+            cv2.waitKey(0) 
 
-            # cv2.destroyAllWindows() 
+            cv2.destroyAllWindows() 
             # temp_img = bgr_img.copy()
             # temp_img[res == 0] = 255
             

@@ -191,19 +191,22 @@ class Trainer(object):
 
                 pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
 
-                gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1)
+                gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
 
+                ##compute head loss
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=None, opt_code_dict=None, pred_dict=pred_dict, 
-                    gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device)
+                    gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device),eye_mask_tensor=eye_mask.to(self.device)
                 )
+
+
             self.optimizer.zero_grad()
             batch_loss_dict["total_loss"].backward()
             self.optimizer.step()
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-            loop_bar.set_description("Opt, Loss: %.6f  " % batch_loss_dict["head_loss"].item())  
+            loop_bar.set_description("Opt, Loss/Eye_loss: %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["eye_loss"].item()) )  
             # except:
             #     print(f'batch bug occurs!xy_size:{self.xy.size()},uv_size:{self.uv.size()}')
             if iter % self.print_freq == 0 and iter != 0:
