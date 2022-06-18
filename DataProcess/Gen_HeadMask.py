@@ -59,7 +59,7 @@ class GenHeadMask(object):
         loop_bar = tqdm(img_path_list)
         loop_bar.set_description("Generate head masks")
         for img_path in loop_bar:
-            save_path = img_path[:-4] + "_mask.png"
+            save_path = img_path[:-4] + "_mask_eye.png"
             bgr_img = cv2.imread(img_path)
             img = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2RGB)
             img = self.to_tensor(img)

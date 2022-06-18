@@ -104,6 +104,7 @@ class Trainer(object):
         if self.resume:
             self.load_checkpoint(self.resume)
             
+
     def _build_tool_funcs(self):
         self.loss_utils = HeadNeRFLossUtils(device=self.device)
         self.render_utils = RenderUtils(view_num=45, device=self.device, opt=self.opt)
@@ -150,8 +151,12 @@ class Trainer(object):
         base_text = mm3d_param['code_info']['base_text'].squeeze(1)
         base_illu = mm3d_param['code_info']['base_illu'].squeeze(1)
 
-        shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
-        appea_code = torch.cat([base_text, base_illu,face_gaze], dim=-1) ##test
+        if self.include_eye_gaze:
+            shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
+            appea_code = torch.cat([base_text, base_illu,face_gaze], dim=-1) ##test
+        else:
+            shape_code = torch.cat([base_iden, base_expr], dim=-1)
+            appea_code = torch.cat([base_text, base_illu], dim=-1) ##test
         
 
         if self.use_gt_camera:

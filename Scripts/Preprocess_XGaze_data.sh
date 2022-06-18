@@ -1,5 +1,5 @@
 # # generating head's mask.
-python DataProcess/Gen_HeadMask.py --img_dir "XGaze_data/normalized_250_data"
+python DataProcess/Gen_HeadMask.py --img_dir "XGaze_Local/normalized_250_data"
 
 # # generating 68-facial-landmarks by face-alignment, which is from 
 # # https://github.com/1adrianb/face-alignment

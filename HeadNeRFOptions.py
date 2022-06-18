@@ -35,12 +35,12 @@ class BaseOptions(object):
 
 
 dataset_config={
-    'dataset_path': './XGaze_data/xgaze/',
+    'dataset_path': './XGaze_Local/xgaze/',
     'opt': BaseOptions(),
     'keys_to_use':['subject0000.h5'], 
     'sub_folder':'train',
-    'camera_dir':'./XGaze_data/xgaze/camera_parameters',
-    '_3dmm_data_dir':'./XGaze_data/normalized_250_data',
+    'camera_dir':'./XGaze_Local/xgaze/camera_parameters',
+    '_3dmm_data_dir':'./XGaze_Local/normalized_250_data',
     'transform':None, 
     'is_shuffle':True,
     'index_file':None, 
@@ -93,7 +93,7 @@ misc_arg.add_argument('--use_gpu', type=str2bool, default=True,
                       help="Whether to run on the GPU")
 misc_arg.add_argument('--pre_trained_model_path', type=str, default='./ckpt/epoch_24_ckpt.pth.tar',
                       help='Directory in which to save model checkpoints')
-misc_arg.add_argument('--print_freq', type=int, default=500,
+misc_arg.add_argument('--print_freq', type=int, default=400,
                       help='How frequently to print training details')
 misc_arg.add_argument('--ckpt_dir', type=str, default='./logs/ckpt',
                       help='Directory in which to save model checkpoints')
