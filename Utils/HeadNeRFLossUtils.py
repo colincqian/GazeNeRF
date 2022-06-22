@@ -185,7 +185,7 @@ class HeadNeRFLossUtils(object):
             noneye_mask = (eye_mask_tensor < 0.5) 
             loss_dict_eye = self.calc_data_loss(coarse_data_dict, gt_rgb, eye_mask, noneye_mask)
             loss_dict['eye_loss'] = loss_dict_eye['head_loss']
-            total_loss += loss_dict['eye_loss'] * 10
+            total_loss += loss_dict['eye_loss'] * 5
 
 
         loss_dict["total_loss"] = total_loss

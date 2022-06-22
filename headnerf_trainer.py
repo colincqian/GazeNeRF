@@ -130,7 +130,8 @@ class Trainer(object):
             para_dict["featmap_nc"] = self.opt.featmap_nc 
             para_dict["pred_img_size"] = self.opt.pred_img_size
             self.save_checkpoint(
-                {'epoch': epoch + 1,
+                {
+                 'epoch': epoch + 1,
                  'net': self.model.state_dict(),
                  'optim_state': self.optimizer.state_dict(),
                  'scheule_state': self.scheduler.state_dict(),
@@ -206,7 +207,7 @@ class Trainer(object):
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-            loop_bar.set_description("Opt, Loss/Eye_loss: %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["eye_loss"].item()) )  
+            loop_bar.set_description("Opt, Head_loss/Eye_loss: %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["eye_loss"].item()) )  
             # except:
             #     print(f'batch bug occurs!xy_size:{self.xy.size()},uv_size:{self.uv.size()}')
             if iter % self.print_freq == 0 and iter != 0:
@@ -239,7 +240,7 @@ class Trainer(object):
         self.model.load_state_dict(ckpt['net'], strict=is_strict)
         self.optimizer.load_state_dict(ckpt['optim_state'])
         self.scheduler.load_state_dict(ckpt['scheule_state'])
-        self.start_epoch = ckpt['epoch'] - 1
+        self.start_epoch = ckpt['epoch'] 
 
         print(
             "[*] Loaded {} checkpoint @ epoch {}".format(

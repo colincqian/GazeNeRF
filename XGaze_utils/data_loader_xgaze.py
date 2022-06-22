@@ -650,17 +650,18 @@ if __name__=='__main__':
     #################test normalized data#####################
     opt = BaseOptions()
     dataset_config={
-        'dataset_path': './XGaze_utils/xgaze/',
-        'opt': opt,
+        'dataset_path': './XGaze_Local/xgaze/',
+        'opt': BaseOptions(),
         'keys_to_use':['subject0000.h5'], 
         'sub_folder':'train',
-        'camera_dir':'./XGaze_utils/xgaze/camera_parameters',
-        '_3dmm_data_dir':'./XGaze_utils/normalized_250_data',
+        'camera_dir':'./XGaze_Local/xgaze/camera_parameters',
+        '_3dmm_data_dir':'./XGaze_Local/normalized_250_data',
         'transform':None, 
-        'is_shuffle':True,
+        'is_shuffle':False,
         'index_file':None, 
         'is_load_label':True,
-        'device': 'cpu'
+        'device': 'cpu',
+        'filter_view': True
 
     }
     gaze_dataset = GazeDataset_normailzed(**dataset_config)

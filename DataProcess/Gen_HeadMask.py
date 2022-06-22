@@ -23,7 +23,7 @@ class GenHeadMask(object):
         self.init_model()
         self.lut = np.zeros((256, ), dtype=np.uint8)
         #self.lut[1:14] = 1 
-        self.lut[0:14] = 1
+        self.lut[1:14] = 1
         self.lut[17] = 2 #hair
         
         #  ['skin', 'l_brow', 'r_brow', 'l_eye', 'r_eye', 'eye_g', 'l_ear', 'r_ear', 'ear_r',
@@ -108,16 +108,16 @@ class GenHeadMask(object):
             res = cv2.resize(res,(width,height))
 
 
-            cv2.imshow('current mask', vis_image)
-            cv2.waitKey(0) 
-            vis_image[res!=255] = 0
-            cv2.imshow('masked image', res)
-            cv2.waitKey(0) 
-            vis_image[eye_mask!=255] = 0
-            cv2.imshow('masked image', eye_mask)
-            cv2.waitKey(0) 
+            # cv2.imshow('current mask', vis_image)
+            # cv2.waitKey(0) 
+            # vis_image[res!=255] = 0
+            # cv2.imshow('masked image', res)
+            # cv2.waitKey(0) 
+            # vis_image[eye_mask!=255] = 0
+            # cv2.imshow('masked image', eye_mask)
+            # cv2.waitKey(0) 
 
-            cv2.destroyAllWindows() 
+            # cv2.destroyAllWindows() 
             # temp_img = bgr_img.copy()
             # temp_img[res == 0] = 255
             

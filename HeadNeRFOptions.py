@@ -93,7 +93,7 @@ misc_arg.add_argument('--use_gpu', type=str2bool, default=True,
                       help="Whether to run on the GPU")
 misc_arg.add_argument('--pre_trained_model_path', type=str, default='./ckpt/epoch_24_ckpt.pth.tar',
                       help='Directory in which to save model checkpoints')
-misc_arg.add_argument('--print_freq', type=int, default=400,
+misc_arg.add_argument('--print_freq', type=int, default=500,
                       help='How frequently to print training details')
 misc_arg.add_argument('--ckpt_dir', type=str, default='./logs/ckpt',
                       help='Directory in which to save model checkpoints')
