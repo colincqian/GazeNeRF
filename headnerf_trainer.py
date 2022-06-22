@@ -216,7 +216,7 @@ class Trainer(object):
             batch_loss_dict["total_loss"].backward()
             self.optimizer.step()
 
-            break
+            
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
@@ -296,6 +296,7 @@ class Trainer(object):
     def _display_current_rendered_image(self,pred_dict,img_tensor,iter):
         coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
         coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+        coarse_fg_rgb = coarse_fg_rgb[:, :, [2, 1, 0]]
         gt_img = (img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         res_img = np.concatenate([gt_img, coarse_fg_rgb], axis=1)
 
