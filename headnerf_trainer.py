@@ -217,13 +217,15 @@ class Trainer(object):
             self.optimizer.step()
 
             break
-
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-            loop_bar.set_description("Opt, Loss/Eye_loss: %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["eye_loss"].item()) )  
-            if iter % self.print_freq == 0 and iter != 0:
-                self._display_current_rendered_image(pred_dict,gt_img,iter)
+
+            loop_bar.set_description("Opt, Head_loss/Eye_loss: %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["eye_loss"].item()) )  
+            # except:
+            #     print(f'batch bug occurs!xy_size:{self.xy.size()},uv_size:{self.uv.size()}')
+
+
                 
     def validation(self,epoch):
         self.model.eval()
@@ -248,7 +250,9 @@ class Trainer(object):
                 output_dict['PSNR'] += eval_metrics['PSNR']
                 output_dict['LPIPS'] += eval_metrics['LPIPS']
                 count+=1
-                break
+
+            if iter % self.print_freq == 0 and iter != 0:
+                self._display_current_rendered_image(pred_dict,gt_img,iter)
         
         output_dict['SSIM'] /= count
         output_dict['PSNR'] /= count
@@ -282,7 +286,7 @@ class Trainer(object):
         self.model.load_state_dict(ckpt['net'], strict=is_strict)
         self.optimizer.load_state_dict(ckpt['optim_state'])
         self.scheduler.load_state_dict(ckpt['scheule_state'])
-        self.start_epoch = ckpt['epoch'] - 1
+        self.start_epoch = ckpt['epoch'] 
 
         print(
             "[*] Loaded {} checkpoint @ epoch {}".format(

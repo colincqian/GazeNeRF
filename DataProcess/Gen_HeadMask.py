@@ -23,7 +23,7 @@ class GenHeadMask(object):
         self.init_model()
         self.lut = np.zeros((256, ), dtype=np.uint8)
         #self.lut[1:14] = 1 
-        self.lut[0:14] = 1
+        self.lut[1:14] = 1
         self.lut[17] = 2 #hair
         
         #  ['skin', 'l_brow', 'r_brow', 'l_eye', 'r_eye', 'eye_g', 'l_ear', 'r_ear', 'ear_r',
