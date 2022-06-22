@@ -35,18 +35,18 @@ class BaseOptions(object):
 
 
 dataset_config={
-    'dataset_path': './XGaze_Local/xgaze/',
+    'dataset_path': './XGaze_data/xgaze/',
     'opt': BaseOptions(),
     'keys_to_use':['subject0000.h5'], 
     'sub_folder':'train',
-    'camera_dir':'./XGaze_Local/xgaze/camera_parameters',
-    '_3dmm_data_dir':'./XGaze_Local/normalized_250_data',
+    'camera_dir':'./XGaze_data/xgaze/camera_parameters',
+    '_3dmm_data_dir':'./XGaze_data/normalized_250_data',
     'transform':None, 
     'is_shuffle':True,
     'index_file':None, 
     'is_load_label':True,
     'device': 'cpu',
-    'filter_view': True
+    'filter_view': True,
 
 }
 
@@ -69,7 +69,7 @@ data_arg = add_argument_group('Data Params')
 data_arg.add_argument('--data_dir', type=str, default='data/xgaze',
                       help='Directory of the data')
 data_arg.add_argument('--batch_size', type=int, default=1,
-                      help='# of images in each batch of data')
+                      help='# of images in each batch of data')         
 data_arg.add_argument('--num_workers', type=int, default=5,
                       help='# of subprocesses to use for data loading')
 

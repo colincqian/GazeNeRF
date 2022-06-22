@@ -1,4 +1,5 @@
 from cmath import isnan
+import select
 
 
 import torch
@@ -19,8 +20,11 @@ from HeadNeRFOptions import BaseOptions
 from NetWorks.HeadNeRFNet import HeadNeRFNet
 from Utils.HeadNeRFLossUtils import HeadNeRFLossUtils
 from Utils.RenderUtils import RenderUtils
+from Utils.Eval_utils import calc_eval_metrics
 from tqdm import tqdm
 import cv2
+
+
 
 class Trainer(object):
     def __init__(self,config,data_loader):
@@ -32,7 +36,8 @@ class Trainer(object):
         ####load configurations####################
         # data params 
         if config.is_train:
-            self.train_loader = data_loader
+            self.train_loader = data_loader[0]
+            self.val_loader = data_loader[1]
             self.num_train = len(self.train_loader.dataset)
             print(f'Load {self.num_train} data samples')
         else:
@@ -111,37 +116,7 @@ class Trainer(object):
         
         self.xy = self.render_utils.ray_xy.to(self.device).expand(self.batch_size,-1,-1)
         self.uv = self.render_utils.ray_uv.to(self.device).expand(self.batch_size,-1,-1)
-    
-    def train(self):
-        for epoch in range(self.start_epoch,self.epochs):
-            print(
-                '\nEpoch: {}/{} - base LR: {:.6f}'.format(
-                    epoch + 1, self.epochs, self.lr)
-            )
-            self.cur_epoch = epoch
-            #Training
-            self.model.train()
-            self.train_one_epoch(epoch,self.train_loader)
 
-            add_file_name = 'epoch_' + str(epoch)
-
-            para_dict={}
-            para_dict["featmap_size"] = self.opt.featmap_size
-            para_dict["featmap_nc"] = self.opt.featmap_nc 
-            para_dict["pred_img_size"] = self.opt.pred_img_size
-            self.save_checkpoint(
-                {'epoch': epoch + 1,
-                 'net': self.model.state_dict(),
-                 'optim_state': self.optimizer.state_dict(),
-                 'scheule_state': self.scheduler.state_dict(),
-                 'para':para_dict
-                 }, add=add_file_name
-            )
-
-            self.scheduler.step() 
-
-        self.writer.close()
-    
     def build_code_and_cam_info(self,data_info):
 
         face_gaze = data_info['gaze'].float()
@@ -180,12 +155,49 @@ class Trainer(object):
             "appea_code":appea_code.to(self.device), 
         }
         return code_info,cam_info
+    
+    def train(self):
+        for epoch in range(self.start_epoch,self.epochs):
+            print(
+                '\nEpoch: {}/{} - base LR: {:.6f}'.format(
+                    epoch + 1, self.epochs, self.lr)
+            )
+            self.cur_epoch = epoch
+            #Training
+            self.model.train()
+            self.train_one_epoch(epoch,self.train_loader)
+
+            add_file_name = 'epoch_' + str(epoch)
+
+            para_dict={}
+            para_dict["featmap_size"] = self.opt.featmap_size
+            para_dict["featmap_nc"] = self.opt.featmap_nc 
+            para_dict["pred_img_size"] = self.opt.pred_img_size
+
+            val_dic = self.validation(epoch)
+
+            add_file_name+= "_%.2f_%.2f_%.2f" % (val_dic['SSIM'],val_dic['PSNR'],val_dic['LPIPS'])
+            
+            self.save_checkpoint(
+                {'epoch': epoch + 1,
+                 'net': self.model.state_dict(),
+                 'optim_state': self.optimizer.state_dict(),
+                 'scheule_state': self.scheduler.state_dict(),
+                 'para':para_dict
+                 }, add=add_file_name
+            )
+
+            
+
+            self.scheduler.step() 
+
+        self.writer.close()
+    
 
     def train_one_epoch(self, epoch, data_loader, is_train=True):
         loop_bar = tqdm(enumerate(data_loader), leave=False, total=len(data_loader))
         for iter,data_info in loop_bar:
 
-            #try:
             with torch.set_grad_enabled(True):
                 code_info,cam_info = self.build_code_and_cam_info(data_info)
 
@@ -203,16 +215,47 @@ class Trainer(object):
             self.optimizer.zero_grad()
             batch_loss_dict["total_loss"].backward()
             self.optimizer.step()
+
+            break
+
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
             loop_bar.set_description("Opt, Loss/Eye_loss: %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["eye_loss"].item()) )  
-            # except:
-            #     print(f'batch bug occurs!xy_size:{self.xy.size()},uv_size:{self.uv.size()}')
             if iter % self.print_freq == 0 and iter != 0:
                 self._display_current_rendered_image(pred_dict,gt_img,iter)
                 
-            
+    def validation(self,epoch):
+        self.model.eval()
+        output_dict = {
+        'SSIM':0,
+        'PSNR':0,
+        'LPIPS':0
+        }
+        count = 0
+        loop_bar = enumerate(self.val_loader)
+        for iter,data_info in loop_bar:
+            with torch.set_grad_enabled(False):
+                code_info,cam_info = self.build_code_and_cam_info(data_info)
+
+                pred_dict = self.model( "test", self.xy, self.uv,  **code_info, **cam_info)
+
+                gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
+
+                eval_metrics = calc_eval_metrics(pred_dict=pred_dict,gt_rgb=gt_img.to(self.device),mask_tensor=mask_img.to(self.device),vis=False)
+                
+                output_dict['SSIM'] += eval_metrics['SSIM']
+                output_dict['PSNR'] += eval_metrics['PSNR']
+                output_dict['LPIPS'] += eval_metrics['LPIPS']
+                count+=1
+                break
+        
+        output_dict['SSIM'] /= count
+        output_dict['PSNR'] /= count
+        output_dict['LPIPS'] /= count
+        print("Evaluation Metrics: SSIM: %.3f  PSNR: %.3f  LPIPS: %.3f" % (output_dict['SSIM'],output_dict['PSNR'],output_dict['LPIPS']))
+        return output_dict
+
 
 
     def save_checkpoint(self, state, add=None):

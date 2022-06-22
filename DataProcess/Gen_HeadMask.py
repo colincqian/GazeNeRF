@@ -108,16 +108,16 @@ class GenHeadMask(object):
             res = cv2.resize(res,(width,height))
 
 
-            cv2.imshow('current mask', vis_image)
-            cv2.waitKey(0) 
-            vis_image[res!=255] = 0
-            cv2.imshow('masked image', res)
-            cv2.waitKey(0) 
-            vis_image[eye_mask!=255] = 0
-            cv2.imshow('masked image', eye_mask)
-            cv2.waitKey(0) 
+            # cv2.imshow('current mask', vis_image)
+            # cv2.waitKey(0) 
+            # vis_image[res!=255] = 0
+            # cv2.imshow('masked image', res)
+            # cv2.waitKey(0) 
+            # vis_image[eye_mask!=255] = 0
+            # cv2.imshow('masked image', eye_mask)
+            # cv2.waitKey(0) 
 
-            cv2.destroyAllWindows() 
+            # cv2.destroyAllWindows() 
             # temp_img = bgr_img.copy()
             # temp_img[res == 0] = 255
             

@@ -124,7 +124,7 @@ def get_train_loader(data_dir,
 #                         )
 #     return DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
 
-def get_data_loader(   mode='train',
+def get_data_loader(    mode='train',
                         batch_size=8,
                         num_workers=4,
                         dataset_config=None):
@@ -137,7 +137,20 @@ def get_data_loader(   mode='train',
     
     XGaze_dataset = GazeDataset_normailzed(**dataset_config)
 
-    return DataLoader(XGaze_dataset,batch_size=batch_size,num_workers=num_workers,drop_last=True)
+    if mode=='train':
+        #training,validation random split
+        train_size = int(0.9*len(XGaze_dataset));validation_size = len(XGaze_dataset) - train_size
+
+        train_dataset, val_dataset = torch.utils.data.random_split(XGaze_dataset, [train_size, validation_size])
+
+        train_loader = DataLoader(train_dataset,batch_size=batch_size,num_workers=num_workers,drop_last=True)
+        val_loader = DataLoader(val_dataset,batch_size=1,num_workers=num_workers,drop_last=True)
+
+        return (train_loader,val_loader)
+    else:
+        print('Not implement test dataloader!!')
+        raise NotImplementedError
+        
 
 
 #########put this in config file after all testing########################
@@ -650,21 +663,22 @@ if __name__=='__main__':
     #################test normalized data#####################
     opt = BaseOptions()
     dataset_config={
-        'dataset_path': './XGaze_utils/xgaze/',
-        'opt': opt,
+        'dataset_path': './XGaze_data/xgaze/',
+        'opt': BaseOptions(),
         'keys_to_use':['subject0000.h5'], 
         'sub_folder':'train',
-        'camera_dir':'./XGaze_utils/xgaze/camera_parameters',
-        '_3dmm_data_dir':'./XGaze_utils/normalized_250_data',
+        'camera_dir':'./XGaze_data/xgaze/camera_parameters',
+        '_3dmm_data_dir':'./XGaze_data/normalized_250_data',
         'transform':None, 
-        'is_shuffle':True,
+        'is_shuffle':False,
         'index_file':None, 
         'is_load_label':True,
-        'device': 'cpu'
+        'device': 'cpu',
+        'filter_view': True
 
     }
     gaze_dataset = GazeDataset_normailzed(**dataset_config)
-    data_loader = DataLoader(gaze_dataset, batch_size=8, num_workers=4)
+    data_loader = DataLoader(gaze_dataset, batch_size=1, num_workers=4)
     for iter,batch in enumerate(data_loader):
         import ipdb;
         ipdb.set_trace()
