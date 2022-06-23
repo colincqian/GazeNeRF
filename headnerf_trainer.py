@@ -257,7 +257,7 @@ class Trainer(object):
         output_dict['SSIM'] /= count
         output_dict['PSNR'] /= count
         output_dict['LPIPS'] /= count
-        print("Evaluation Metrics: SSIM: %.3f  PSNR: %.3f  LPIPS: %.3f" % (output_dict['SSIM'],output_dict['PSNR'],output_dict['LPIPS']))
+        print("Evaluation Metrics: SSIM: %.4f  PSNR: %.4f  LPIPS: %.4f" % (output_dict['SSIM'],output_dict['PSNR'],output_dict['LPIPS']))
         return output_dict
 
 
@@ -296,7 +296,7 @@ class Trainer(object):
     def _display_current_rendered_image(self,pred_dict,img_tensor,iter):
         coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
         coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
-        coarse_fg_rgb = coarse_fg_rgb[:, :, [2, 1, 0]]
+        #coarse_fg_rgb = coarse_fg_rgb[:, :, [2, 1, 0]]
         gt_img = (img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         res_img = np.concatenate([gt_img, coarse_fg_rgb], axis=1)
 
