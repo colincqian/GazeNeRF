@@ -139,7 +139,7 @@ def get_data_loader(    mode='train',
 
     if mode=='train':
         #training,validation random split
-        train_size = int(0.9*len(XGaze_dataset));validation_size = len(XGaze_dataset) - train_size
+        train_size = int(0.95*len(XGaze_dataset));validation_size = len(XGaze_dataset) - train_size
 
         train_dataset, val_dataset = torch.utils.data.random_split(XGaze_dataset, [train_size, validation_size])
 

@@ -35,14 +35,14 @@ class BaseOptions(object):
 
 
 dataset_config={
-    'dataset_path': './XGaze_Local/xgaze/',
+    'dataset_path': './XGaze_data/xgaze/',
     'opt': BaseOptions(),
     'keys_to_use':['subject0000.h5'], 
     'sub_folder':'train',
-    'camera_dir':'./XGaze_Local/xgaze/camera_parameters',
-    '_3dmm_data_dir':'./XGaze_Local/normalized_250_data',
+    'camera_dir':'./XGaze_data/xgaze/camera_parameters',
+    '_3dmm_data_dir':'./XGaze_data/normalized_250_data',
     'transform':None, 
-    'is_shuffle':True,
+    'is_shuffle':False,
     'index_file':None, 
     'is_load_label':True,
     'device': 'cpu',
@@ -78,7 +78,7 @@ data_arg.add_argument('--num_workers', type=int, default=5,
 train_arg = add_argument_group('Training Params')
 train_arg.add_argument('--is_train', type=str2bool, default=True,
                        help='Whether to train or test the model')
-train_arg.add_argument('--epochs', type=int, default=25,
+train_arg.add_argument('--epochs', type=int, default=26,
                        help='# of epochs to train for')
 train_arg.add_argument('--init_lr', type=float, default=0.00001,
                        help='Initial learning rate value')
@@ -93,7 +93,7 @@ misc_arg.add_argument('--use_gpu', type=str2bool, default=True,
                       help="Whether to run on the GPU")
 misc_arg.add_argument('--pre_trained_model_path', type=str, default='./ckpt/epoch_24_ckpt.pth.tar',
                       help='Directory in which to save model checkpoints')
-misc_arg.add_argument('--print_freq', type=int, default=50,
+misc_arg.add_argument('--print_freq', type=int, default=1,
                       help='How frequently to print training details')
 misc_arg.add_argument('--ckpt_dir', type=str, default='./logs/ckpt',
                       help='Directory in which to save model checkpoints')

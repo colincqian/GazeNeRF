@@ -39,11 +39,28 @@ class Gen2DLandmarks(object):
             save_path = img_path[:-4] + "_lm2d.txt"
         
             preds = res[0]
-
+            
+            import ipdb
+            ipdb.set_trace()
             with open(save_path, "w") as f:
                 for tt in preds:
                     f.write("%f \n"%(tt[0]))
                     f.write("%f \n"%(tt[1]))
+
+    def process_single_image(self,img_rgb):
+        res = self.fa_func.get_landmarks(img_rgb)
+        
+        if res is None:
+            print("Warning: can't predict the landmark info of image" )
+            return None
+    
+        preds = res[0]
+        return preds.reshape((-1)) #flatten landmarks
+        
+
+
+
+
         
 
 if __name__ == "__main__":

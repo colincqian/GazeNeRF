@@ -210,20 +210,18 @@ class Trainer(object):
                     delta_cam_info=None, opt_code_dict=None, pred_dict=pred_dict, 
                     gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device),eye_mask_tensor=eye_mask.to(self.device)
                 )
-
+            
 
             self.optimizer.zero_grad()
             batch_loss_dict["total_loss"].backward()
             self.optimizer.step()
 
-            
+            break
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-
+            break
             loop_bar.set_description("Opt, Head_loss/Eye_loss: %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["eye_loss"].item()) )  
-            # except:
-            #     print(f'batch bug occurs!xy_size:{self.xy.size()},uv_size:{self.uv.size()}')
 
 
                 

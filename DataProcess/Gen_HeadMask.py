@@ -125,6 +125,40 @@ class GenHeadMask(object):
             cv2.imwrite(save_path, res)
             cv2.imwrite(eye_mask_path, eye_mask)
             
+    def process_single_image(self,img):
+        '''
+        input image
+        output masked image and eye mask
+        '''
+
+        width,height,_ = img.shape
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.resize(img,(512,512))  #resize for better segmentation of eyes
+        temp_image =img.copy()
+        img = self.to_tensor(img)
+        img = img.unsqueeze(0)
+        img = img.to(self.device)
+        with torch.set_grad_enabled(False):
+            pred_res = self.net(img)
+            out = pred_res[2]  ##select the finetuned degree of segmentation results
+
+        res = out.squeeze(0).cpu().numpy().argmax(0)
+        res = res.astype(np.uint8)
+        eye_mask = self.extrace_eye_mask(res)#extract eye segmentation
+        cv2.LUT(res, self.lut, res)
+        
+        res = correct_hair_mask(res)
+
+        res[res != 0] = 255
+        res = self.green_screen_filtering(temp_image,res)
+
+        eye_mask = np.bitwise_and(res,eye_mask)#filter out infeasible eye seg
+
+        eye_mask = cv2.resize(eye_mask,(width,height))
+        res = cv2.resize(res,(width,height))
+
+        return (res,eye_mask)
+
 
 
 

@@ -1,1 +1,1 @@
-python train_headnerf.py --headnerf_options "TrainedModels/model_Reso32HR.pth" --batch_size 1
+python -m ipdb train_headnerf.py --headnerf_options "TrainedModels/model_Reso32HR.pth" --batch_size 1
