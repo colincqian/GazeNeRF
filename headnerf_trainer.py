@@ -216,7 +216,7 @@ class Trainer(object):
             batch_loss_dict["total_loss"].backward()
             self.optimizer.step()
 
-            break
+
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
