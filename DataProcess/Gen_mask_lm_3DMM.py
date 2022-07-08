@@ -104,6 +104,10 @@ class Data_Processor(object):
                     output_face_gaze = fid.create_dataset("face_gaze", shape=(num_data, 2),
                                                     dtype=float, chunks=(1, 2), data = gazes[:num_data,:])
 
+                output_face_patches= fid.create_dataset("face_patch", shape=(num_data, image_patch_size, image_patch_size,3),
+                                                                        compression='lzf', dtype=np.uint8,
+                                                                       chunks=(1, image_patch_size, image_patch_size,3),data=face_patches[:num_data,:])
+
             valid_mask = [False] * num_data
             for num_i in tqdm(range(num_data)):
                 face_patch = face_patches[num_i, :]  # the face patch
