@@ -13,7 +13,7 @@ import torch
 from Gen_HeadMask import GenHeadMask
 from Gen_Landmark import  Gen2DLandmarks
 import sys
-sys.path.append("/home/colinqian/Project/HeadNeRF/headnerf/Fitting3DMM")
+sys.path.append("/home/chqian/Ubuntu_data/Project/headnerf/Fitting3DMM")
 from FittingNL3DMM import FittingNL3DMM_from_h5py
 
 
@@ -37,7 +37,7 @@ class Data_Processor(object):
             self.hdf_input_dir = img_dir
         else:
             self.hdf_input_dir = None
-    
+        self.load_utils()
 
     def generate_head_mask(self,image):
         head_mask,eye_mask = self.headmask_generator.process_single_image(image)
@@ -64,12 +64,16 @@ class Data_Processor(object):
         return mask_not_exist & lm_not_exist
          
     def process_data_from_hdf_file(self,sub_id,image_patch_size=250):
-        self.load_utils()
+        
 
         if self.hdf_input_dir is None:
             print('Set hdf file to True to enable loading from hdf file!!')
 
         input_file = os.path.join(self.hdf_input_dir , 'subject' +str(sub_id).zfill(4) + '.h5')
+
+        if not os.path.exists(input_file):
+            print(f'Current subject {sub_id} not exist!!')
+            return
 
         with h5py.File(os.path.join(self.save_dir,f'processed_subject{str(sub_id).zfill(4)}'),'w') as fid,h5py.File(input_file,'r') as src_file:
             
@@ -135,7 +139,7 @@ class Data_Processor(object):
                 # cv2.waitKey(0) 
                 # cv2.destroyAllWindows() 
 
-            fid.create_dataset("valid_mask", data = valid_mask)
+            fid.create_dataset("valid_mask", data = valid_mask)##if num data is zero, valid mask should be []
         
             
 
@@ -204,10 +208,13 @@ if __name__ == "__main__":
     # parser.add_argument("--gpu_id", type=int, default=0)
     parser.add_argument("--img_dir", type=str, required=True)
     parser.add_argument("--save_dir", type=str, required=True)
+    parser.add_argument("--sb", type=int, required=True,default=0)
+    parser.add_argument("--se", type=int, required=True,default=1)
     args = parser.parse_args()
 
     test = Data_Processor(args.img_dir,args.save_dir,250,125,hdf_file=True)
-    test.process_data_from_hdf_file(0)
+    for sub_id in range(args.sb,args.se):
+        test.process_data_from_hdf_file(sub_id)
     #test.process_mask_and_landmark(0)
     #load_h5py_file(args.save_dir + '/00000.hdf5')
 
