@@ -1,0 +1,1 @@
+python DataProcess/Gen_mask_lm_3DMM.py --img_dir /media/chqian/Seagate\ Expansion\ Drive/Master_thesis/XGAZE_dataset/xgaze_raw_sample/normalized --save_dir XGaze_data/processed_data/ --sb 0 --se 15

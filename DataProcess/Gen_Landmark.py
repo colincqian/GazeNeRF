@@ -40,14 +40,14 @@ class Gen2DLandmarks(object):
         
             preds = res[0]
             
-            import ipdb
-            ipdb.set_trace()
+
             with open(save_path, "w") as f:
                 for tt in preds:
                     f.write("%f \n"%(tt[0]))
                     f.write("%f \n"%(tt[1]))
 
     def process_single_image(self,img_rgb):
+        img_rgb = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2RGB)
         res = self.fa_func.get_landmarks(img_rgb)
         
         if res is None:

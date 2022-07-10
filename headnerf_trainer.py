@@ -220,7 +220,7 @@ class Trainer(object):
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-            break
+            
             loop_bar.set_description("Opt, Head_loss/Eye_loss: %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["eye_loss"].item()) )  
 
 

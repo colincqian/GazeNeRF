@@ -45,6 +45,7 @@ class Data_Processor(object):
 
     def generate_landmarks(self,image):
         landmarks = self.landmark_generator.process_single_image(image)
+
         return landmarks  #(136,) numpy
 
     def generate_nl3dmm_parameter(self,image,lm_info):
@@ -62,7 +63,16 @@ class Data_Processor(object):
         lm_not_exist = not os.path.exists(image_path.replace(".png","_lm2d.txt")) #landmark file not exist
 
         return mask_not_exist & lm_not_exist
-         
+
+
+    def load_image(self,image_idx,image_dir):
+        image_path = os.path.join(image_dir,str(image_idx).zfill(6)+'.png')
+        return cv2.imread(image_path)
+
+    def load_lm2d(self,image_idx,image_dir):
+        lm_path = os.path.join(image_dir,str(image_idx).zfill(6)+'_lm2d.txt')
+        return np.loadtxt(lm_path, dtype = np.float32)
+
     def process_data_from_hdf_file(self,sub_id,image_patch_size=250):
         
 
@@ -79,7 +89,14 @@ class Data_Processor(object):
             
             self.include_gaze = False
             num_data = src_file.attrs['data_size']
-            face_patches = src_file['face_patch']
+
+            try:
+                face_patches = src_file['face_patch']
+            except:
+                print('face patch not found!!')
+                fid.create_dataset("valid_mask", data = [False]*num_data)##if num data is zero, valid mask should be []
+                return
+
             if 'face_gaze' in src_file.keys():
                 self.include_gaze = True
                 gazes = src_file['face_gaze']
@@ -110,7 +127,7 @@ class Data_Processor(object):
 
                 output_face_patches= fid.create_dataset("face_patch", shape=(num_data, image_patch_size, image_patch_size,3),
                                                                         compression='lzf', dtype=np.uint8,
-                                                                       chunks=(1, image_patch_size, image_patch_size,3),data=face_patches[:num_data,:])
+                                                                       chunks=(1, image_patch_size, image_patch_size,3))
 
             valid_mask = [False] * num_data
             for num_i in tqdm(range(num_data)):
@@ -120,8 +137,14 @@ class Data_Processor(object):
                 # frame_index = fid['frame_index'][num_i, 0]  # the frame index
                 # cam_index = fid['cam_index'][num_i, 0]   # the camera index     
                 face_patch = cv2.resize(face_patch, (image_patch_size, image_patch_size))   
+
                 mask, eye_mask, lm2d, nl3dmm_param = self.process_mask_and_landmark_for_single_image(face_patch)
 
+                # face_patch_loaded = self.load_image(num_i,'test_data/playground')
+                # lm_loaded = self.load_lm2d(num_i,'test_data/playground')
+
+
+                output_face_patches[num_i] = face_patch
                 output_face_mask[num_i] = mask
                 output_eye_mask[num_i] = eye_mask
                 output_lm2d[num_i] = lm2d
@@ -129,19 +152,27 @@ class Data_Processor(object):
                     valid_mask[num_i] = True
                     for key in nl3d_param_output.keys():
                         nl3d_param_output[key][num_i] = nl3dmm_param[key]
+                if np.isnan(nl3d_param_output['code'][num_i]).any():
+                    ##nan detected
+                    print('detect nan in nl3d parameters')
+                    valid_mask[num_i] = False
+                
+                    # import ipdb
+                    # ipdb.set_trace()
+                    # cv2.imshow('current mask', mask)
+                    # cv2.waitKey(0) 
+                    # cv2.imshow('masked image', eye_mask)
+                    # cv2.waitKey(0) 
+                    # face_patch[mask!=255] = 0
+                    # cv2.imshow('masked image', face_patch)
+                    # cv2.waitKey(0) 
+                    # face_patch[eye_mask!=255] = 0
+                    # cv2.imshow('masked image', face_patch)
+                    # cv2.waitKey(0) 
+                    # cv2.destroyAllWindows() 
 
 
-                # cv2.imshow('current mask', mask)
-                # cv2.waitKey(0) 
-                # cv2.imshow('masked image', eye_mask)
-                # cv2.waitKey(0) 
-                # face_patch[mask!=255] = 0
-                # cv2.imshow('masked image', face_patch)
-                # cv2.waitKey(0) 
-                # face_patch[eye_mask!=255] = 0
-                # cv2.imshow('masked image', face_patch)
-                # cv2.waitKey(0) 
-                # cv2.destroyAllWindows() 
+
 
             fid.create_dataset("valid_mask", data = valid_mask)##if num data is zero, valid mask should be []
         
@@ -153,7 +184,7 @@ class Data_Processor(object):
         lm2d = self.generate_landmarks(img)
 
         if lm2d is not None:
-            nl3dmm_param = self.generate_nl3dmm_parameter(img,lm2d)
+            nl3dmm_param = self.generate_nl3dmm_parameter(img.copy(),lm2d.copy())
         else:
             nl3dmm_param = None
         

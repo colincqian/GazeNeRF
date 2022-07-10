@@ -271,9 +271,6 @@ class FittingNL3DMM(object):
             
             try:
                 temp_data = self.data_utils.load_batch_sample(idx_list)
-
-                import ipdb
-                ipdb.set_trace()
                 self.opt_batch_data(**temp_data)
             except:
                 print('skip data')
@@ -543,6 +540,7 @@ class FittingNL3DMM_from_h5py(object):
     def load_one_sample(self,img,lm_info):
 
         #base_name = os.path.basename(img_path)[:-4]
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32)/255.0
         if self.reize_img:
             img = cv2.resize(img, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_LINEAR)
@@ -553,14 +551,14 @@ class FittingNL3DMM_from_h5py(object):
             lm_info *= self.lm_scale
         lm_info = torch.from_numpy(lm_info).unsqueeze(0)
 
-        inmats = self.base_inmat.unsqueeze(0)
-        w2c_Rmats = self.base_w2c_Rmat.unsqueeze(0)
-        w2c_Tvecs = self.base_w2c_Tvec.unsqueeze(0)
+        inmats = self.base_inmat.unsqueeze(0).repeat(1, 1, 1)
+        w2c_Rmats = self.base_w2c_Rmat.unsqueeze(0).repeat(1, 1, 1)
+        w2c_Tvecs = self.base_w2c_Tvec.unsqueeze(0).repeat(1, 1, 1)
 
         res_dict = {
-            "imgs":img,
+            "imgs":torch.cat([img],dim=0),
             "inmats":inmats,
-            "lms":lm_info,
+            "lms":torch.cat([lm_info],dim=0),
             "w2c_Rmats":w2c_Rmats,
             "w2c_Tvecs":w2c_Tvecs,
             }
