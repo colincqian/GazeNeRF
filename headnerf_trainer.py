@@ -47,6 +47,10 @@ class Trainer(object):
         self.batch_size = config.batch_size
         self.use_gt_camera = config.use_gt_camera
         self.include_eye_gaze = config.include_eye_gaze
+        self.eye_gaze_dim = config.eye_gaze_dimension
+        if self.eye_gaze_dim%2 == 1:
+            #we need eye_gaze_dim to be even number
+            raise Exception("eye_gaze_dim expected to be even number!")
 
         # training params
         self.epochs = config.epochs  # the total epoch to train
@@ -79,17 +83,17 @@ class Trainer(object):
             para_dict = check_dict["para"]
             self.opt = BaseOptions(para_dict)
 
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=False)        
-            self.model.load_state_dict(check_dict["net"])
-            print(f'load model parameter from {self.headnerf_options}')
+            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=self.include_eye_gaze,eye_gaze_dim=self.eye_gaze_dim)  
+            self._load_model_parameter(check_dict)
+            print(f'load model parameter from {self.headnerf_options},set include_eye gaze to be {self.include_eye_gaze}')
         else:
             self.opt = BaseOptions()
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=self.include_eye_gaze)   
+            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=self.include_eye_gaze,eye_gaze_dim=self.eye_gaze_dim)   
             print(f'Train model from scratch, set include_eye gaze to be {self.include_eye_gaze}')     
         
         ##device setting
         if self.use_gpu and torch.cuda.device_count() > 0:
-            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            print("Let's use", torch.cuda.device_count(), "GPUs!")              
             gpu_id = torch.cuda.current_device()
             self.device = torch.device("cuda:%d" % gpu_id)
             self.model.cuda()
@@ -109,6 +113,20 @@ class Trainer(object):
         if self.resume:
             self.load_checkpoint(self.resume)
             
+    def _load_model_parameter(self,check_dict):
+        #dealing with extended model when include eye gaze input
+        if self.include_eye_gaze:
+            #weight list contains keys that needs to be extended when include eye_gaze in headnerf
+            weight_list = ["fg_CD_predictor.FeaExt_module_5.weight", "fg_CD_predictor.RGB_layer_1.weight","fg_CD_predictor.FeaExt_module_0.weight"]
+            for key in weight_list:
+                r,c,_,_ = check_dict["net"][key].size()
+                original_weight = check_dict["net"][key]
+                extended_weight = torch.zeros((r,self.eye_gaze_dim,1,1))
+                new_weight = torch.cat((original_weight,extended_weight),1)
+                assert new_weight.size(1) == c + self.eye_gaze_dim
+                check_dict["net"][key] = new_weight
+            print(f'Eye gaze feature dimension: {self.eye_gaze_dim}')
+        self.model.load_state_dict(check_dict["net"])
 
     def _build_tool_funcs(self):
         self.loss_utils = HeadNeRFLossUtils(device=self.device)
@@ -127,6 +145,7 @@ class Trainer(object):
         base_illu = mm3d_param['code_info']['base_illu'].squeeze(1)
 
         if self.include_eye_gaze:
+            face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//2)
             shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
             appea_code = torch.cat([base_text, base_illu,face_gaze], dim=-1) ##test
         else:
@@ -309,4 +328,15 @@ class Trainer(object):
         # cv2.waitKey(0) 
         # #closing all open windows 
         # cv2.destroyAllWindows() 
+
+
+if __name__ == '__main__':
+    check_dict = torch.load("TrainedModels/model_Reso32.pth", map_location=torch.device("cpu"))
+    para_dict = check_dict["para"]
+    opt = BaseOptions(para_dict)
+    model = HeadNeRFNet(opt, include_vd=False, hier_sampling=False,include_gaze=True)  
+    import ipdb
+    ipdb.set_trace()
+    model.load_state_dict(check_dict["net"])
+
 

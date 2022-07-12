@@ -46,7 +46,7 @@ dataset_config={
     'index_file':None, 
     'is_load_label':True,
     'device': 'cpu',
-    'filter_view': True,
+    'filter_view': True
 
 }
 
@@ -106,6 +106,8 @@ misc_arg.add_argument('--use_gt_camera', type=str2bool, default=False,
 
 misc_arg.add_argument('--include_eye_gaze', type=str2bool, default=False,
                     help="Whether to include eye gaze as additional input to headnerf")
+misc_arg.add_argument('--eye_gaze_dimension', type=int, default=2,
+                      help='Decide to which dimension we would like eye gaze input to extend')
 
 misc_arg.add_argument('--resume', type=str, default='',
                       help='whether to resume training, load saved ckpt')                   

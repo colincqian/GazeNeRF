@@ -8,12 +8,13 @@ from HeadNeRFOptions import BaseOptions
 
 
 class HeadNeRFNet(nn.Module):
-    def __init__(self, opt: BaseOptions, include_vd, hier_sampling,include_gaze=False) -> None:
+    def __init__(self, opt: BaseOptions, include_vd, hier_sampling,include_gaze=False,eye_gaze_dim=2) -> None:
         super().__init__()
 
         self.hier_sampling = hier_sampling
         self.include_vd = include_vd
         self.include_gaze = include_gaze
+        self.eye_gaze_dim = eye_gaze_dim
         self._build_info(opt)
         self._build_tool_funcs()
         
@@ -48,7 +49,7 @@ class HeadNeRFNet(nn.Module):
         vp_channels = self.base_shape_code_dims
         vp_channels += self.vp_n_freqs * 6 + 3 if self.include_input_for_vp_embeder else self.vp_n_freqs * 6
         if self.include_gaze:
-            vp_channels += 2
+            vp_channels += self.eye_gaze_dim
         
         self.vp_encoder = Embedder(N_freqs=self.vp_n_freqs, include_input=self.include_input_for_vp_embeder)
         
@@ -58,7 +59,7 @@ class HeadNeRFNet(nn.Module):
             vd_channels += tv
             self.vd_encoder = Embedder(N_freqs=self.vd_n_freqs, include_input=self.include_input_for_vd_embeder)
         if self.include_gaze:
-            vd_channels += 2
+            vd_channels += self.eye_gaze_dim
                 
         
         self.sample_func = GenSamplePoints(self.opt)
