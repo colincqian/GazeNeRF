@@ -63,6 +63,7 @@ class Trainer(object):
 
         # misc params
         self.use_gpu = config.use_gpu
+        self.gpu_id = config.gpu_id
         self.ckpt_dir = config.ckpt_dir  # output dir
         self.print_freq = config.print_freq
         self.train_iter = 0
@@ -93,11 +94,13 @@ class Trainer(object):
         
         ##device setting
         if self.use_gpu and torch.cuda.device_count() > 0:
-            print("Let's use", torch.cuda.device_count(), "GPUs!")              
+            print("Let's use", torch.cuda.device_count(), "GPUs!")  
+            if self.gpu_id >=0 :
+                torch.cuda.set_device(self.gpu_id)
             gpu_id = torch.cuda.current_device()
             self.device = torch.device("cuda:%d" % gpu_id)
             self.model.cuda()
-            print(f'GPU name:{torch.cuda.get_device_name(gpu_id)}')
+            print(f'GPU {str(gpu_id).zfill(2)} name:{torch.cuda.get_device_name(gpu_id)}')
         else:
             self.device = torch.device("cpu")
             
@@ -136,7 +139,6 @@ class Trainer(object):
         self.uv = self.render_utils.ray_uv.to(self.device).expand(self.batch_size,-1,-1)
 
     def build_code_and_cam_info(self,data_info):
-
         face_gaze = data_info['gaze'].float()
         mm3d_param = data_info['_3dmm']
         base_iden = mm3d_param['code_info']['base_iden'].squeeze(1)
@@ -253,11 +255,13 @@ class Trainer(object):
         }
         count = 0
         loop_bar = enumerate(self.val_loader)
+        xy = self.render_utils.ray_xy.to(self.device).expand(self.val_loader.batch_size,-1,-1)
+        uv = self.render_utils.ray_uv.to(self.device).expand(self.val_loader.batch_size,-1,-1)
         for iter,data_info in loop_bar:
             with torch.set_grad_enabled(False):
                 code_info,cam_info = self.build_code_and_cam_info(data_info)
 
-                pred_dict = self.model( "test", self.xy, self.uv,  **code_info, **cam_info)
+                pred_dict = self.model( "test", xy, uv,  **code_info, **cam_info)
 
                 gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
 

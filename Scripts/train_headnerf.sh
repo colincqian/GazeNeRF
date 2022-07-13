@@ -1,1 +1,1 @@
-python train_headnerf.py --headnerf_options "TrainedModels/model_Reso32HR.pth" --batch_size 1 --include_eye_gaze True --eye_gaze_dimension 8
+python train_headnerf.py --headnerf_options "TrainedModels/model_Reso32HR.pth" --batch_size 2 --include_eye_gaze True --eye_gaze_dimension 16
