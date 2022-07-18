@@ -112,7 +112,10 @@ misc_arg.add_argument('--eye_gaze_dimension', type=int, default=2,
                       help='Decide to which dimension we would like eye gaze input to extend')
 
 misc_arg.add_argument('--resume', type=str, default='',
-                      help='whether to resume training, load saved ckpt')                   
+                      help='whether to resume training, load saved ckpt')        
+
+misc_arg.add_argument('--comment', type=str, default='',
+                      help='use comment to describ experiment')                
 
 def get_config():
     config, unparsed = parser.parse_known_args()

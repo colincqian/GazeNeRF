@@ -343,7 +343,7 @@ class Trainer(object):
             print("now =", now)
             self.logger = log(path=log_path,file=f'{now}_training_log_file.logs')
 
-            config_list=['batch_size','init_lr','epochs','ckpt_dirs','include_eye_gaze','eye_gaze_dimension']
+            config_list=['batch_size','init_lr','epochs','ckpt_dirs','include_eye_gaze','eye_gaze_dimension','comment']
             self.logger.info("----Training configuration----")
             for k,v in self.config.__dict__.items():
                 if k in config_list:
