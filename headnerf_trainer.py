@@ -23,7 +23,7 @@ from Utils.RenderUtils import RenderUtils
 from Utils.Eval_utils import calc_eval_metrics
 from tqdm import tqdm
 import cv2
-
+from Utils.Log_utils import log
 
 
 class Trainer(object):
@@ -178,6 +178,7 @@ class Trainer(object):
         return code_info,cam_info
     
     def train(self):
+        self.logging_config('./logs')
         for epoch in range(self.start_epoch,self.epochs):
             print(
                 '\nEpoch: {}/{} - base LR: {:.6f}'.format(
@@ -208,9 +209,11 @@ class Trainer(object):
                  }, add=add_file_name
             )
 
-            
+            val_dic['ckpt_name'] = add_file_name
+            self.logging_config('./logs',val_dic)
 
             self.scheduler.step() 
+
 
         self.writer.close()
     
@@ -332,6 +335,28 @@ class Trainer(object):
         # cv2.waitKey(0) 
         # #closing all open windows 
         # cv2.destroyAllWindows() 
+    
+    def logging_config(self,log_path,val_dict={}):
+        from datetime import datetime
+        if not val_dict :
+            now = datetime.now()       
+            print("now =", now)
+            self.logger = log(path=log_path,file=f'{now}_training_log_file.logs')
+
+            config_list=['batch_size','init_lr','epochs','ckpt_dirs','include_eye_gaze','eye_gaze_dimension']
+            self.logger.info("----Training configuration----")
+            for k,v in self.config.__dict__.items():
+                if k in config_list:
+                    self.logger.info(str(k) + ' : ' + str(v))
+            self.logger.info("--------------------------------------------------")
+        else: 
+            self.logger.info("Evaluation Results")
+            for k,v in val_dict.items():
+                self.logger.info(str(k) + ' = ' + str(v))
+            self.logger.info("--------------------------------------------------")
+
+
+        
 
 
 if __name__ == '__main__':
