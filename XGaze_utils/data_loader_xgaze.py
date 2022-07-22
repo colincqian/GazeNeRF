@@ -103,26 +103,6 @@ def get_train_loader(data_dir,
     train_loader = DataLoader(train_set, batch_size=batch_size, num_workers=num_workers)
 
     return train_loader
-# def get_data_loader(data_dir,
-#                     annotation_path,
-#                     batch_size,
-#                     num_workers=4,
-#                     is_shuffle=True):
-#     gpu_id = 0
-#     frame_selected=[0]
-#     subject_selected=[0]
-#     device = torch.device("cuda:%d" % gpu_id)
-#     options = BaseOptions()
-
-#     dataset = XGaze_raw(data_dir,
-#                         frame_selected,
-#                         subject_selected,
-#                         annotation_path,
-#                         device,
-#                         options,
-#                         is_shuffle=is_shuffle
-#                         )
-#     return DataLoader(dataset, batch_size=batch_size, num_workers=num_workers)
 
 def get_data_loader(    mode='train',
                         batch_size=8,
@@ -132,14 +112,15 @@ def get_data_loader(    mode='train',
     if dataset_config is None:
         print('dataset configure file required!!')
         raise
-    
+    torch.manual_seed(0)
     dataset_config['sub_folder'] = mode #'train' or 'test'
     
-    XGaze_dataset = GazeDataset_normailzed(**dataset_config)
+    #XGaze_dataset = GazeDataset_normailzed(**dataset_config)
+    XGaze_dataset = GazeDataset_normailzed_from_hdf(**dataset_config)
 
     if mode=='train':
         #training,validation random split
-        train_size = int(0.9*len(XGaze_dataset));validation_size = len(XGaze_dataset) - train_size
+        train_size = int(0.95*len(XGaze_dataset));validation_size = len(XGaze_dataset) - train_size
 
         train_dataset, val_dataset = torch.utils.data.random_split(XGaze_dataset, [train_size, validation_size])
 
@@ -185,25 +166,53 @@ class BaseOptions(object):
             self.featmap_nc = para_dict["featmap_nc"]
             self.pred_img_size = para_dict["pred_img_size"]
 
-            
-#######################original gaze dataset##################################
-class GazeDataset(Dataset):
-    def __init__(self, dataset_path: str, keys_to_use: List[str] = None, sub_folder='', transform=None, is_shuffle=True,
-                 index_file=None, is_load_label=True):
+################data loader for normalized data from hdf file#############################        
+class GazeDataset_normailzed_from_hdf(Dataset):
+    def __init__(self, dataset_path: str,
+                 opt: BaseOptions,
+                 keys_to_use: List[str] = None, 
+                 sub_folder='',
+                 camera_dir='',
+                 _3dmm_data_dir='',
+                 transform=None, 
+                 is_shuffle=True,
+                 index_file=None, 
+                 is_load_label=True,
+                 device = 'cpu',
+                 filter_view=False):
         self.path = dataset_path
         self.hdfs = {}
         self.sub_folder = sub_folder
         self.is_load_label = is_load_label
+        self.camera_loader = Camera_Loader(camera_dir)
+        self._3dmm_data_dir = _3dmm_data_dir
+        self.device = device
+        self.filter_view = filter_view
+        if opt is not None:
+            self.opt = opt
+        else:
+            print('option class required, input of opt is None!!')
+            raise
+        self.img_size = (self.opt.pred_img_size, self.opt.pred_img_size)
+        self.pred_img_size = self.opt.pred_img_size
+        self.featmap_size = self.opt.featmap_size
+        self.featmap_nc = self.opt.featmap_nc
         
 
         # assert len(set(keys_to_use) - set(all_keys)) == 0
         # Select keys
         # TODO: select only people with sufficient entries?
+        if self.filter_view:
+            ##filter out some severe camera view
+            dist_index = [(np.linalg.norm(self.camera_loader[i]['cam_translation']),i) for i in range(18)]
+            dist_index.sort()
+            self.valid_camera_index = {index for dist,index in dist_index[:10]}#keep camera with 10 least distance
+
         self.selected_keys = [k for k in keys_to_use] #list of h5 file name
         assert len(self.selected_keys) > 0
 
         for num_i in range(0, len(self.selected_keys)):
-            file_path = os.path.join(self.path, self.sub_folder, self.selected_keys[num_i])
+            file_path = os.path.join(self.path,f'processed_{self.selected_keys[num_i]}')
             self.hdfs[num_i] = h5py.File(file_path, 'r', swmr=True)
             # print('read file: ', os.path.join(self.path, self.selected_keys[num_i]))
             assert self.hdfs[num_i].swmr_mode
@@ -212,8 +221,10 @@ class GazeDataset(Dataset):
         if index_file is None:
             self.idx_to_kv = []
             for num_i in range(0, len(self.selected_keys)):
-                n = self.hdfs[num_i]["face_patch"].shape[0]
-                self.idx_to_kv += [(num_i, i) for i in range(n)]
+                hdfs_file = self.hdfs[num_i]
+                n = hdfs_file["face_patch"].shape[0]
+                self.idx_to_kv += [(num_i, i) for i in range(n)
+                                    if hdfs_file['valid_mask'][i] ] #valid frame in subject num_i
         else:
             print('load the file: ', index_file)
             self.idx_to_kv = np.loadtxt(index_file, dtype=np.int)
@@ -229,6 +240,8 @@ class GazeDataset(Dataset):
         self.hdf = None
         self.transform = transform
 
+        
+
     def __len__(self):
         return len(self.idx_to_kv)
 
@@ -241,25 +254,172 @@ class GazeDataset(Dataset):
     def __getitem__(self, idx):
         key, idx = self.idx_to_kv[idx]
 
-        self.hdf = h5py.File(os.path.join(self.path, self.sub_folder, self.selected_keys[key]), 'r', swmr=True)
+        file_path = os.path.join(self.path,f'processed_{self.selected_keys[key]}')
+        self.hdf = h5py.File(file_path, 'r', swmr=True)
         assert self.hdf.swmr_mode
+
+        #img_name = str(idx+1).zfill(6)+'.png'
+        #img_path = os.path.join(self._3dmm_data_dir,img_name)
+        img_index = idx
 
         # Get face image
         #<KeysViewHDF5 ['cam_index', 'face_gaze', 'face_head_pose', 'face_mat_norm', 'face_patch',     'frame_index']>
         #               (10098, 1)    (10098, 2)     (10098, 2)     (10098, 3, 3)  (10098, 224, 224, 3)  (10098, 1)
         #                       
-        image = self.hdf['face_patch'][idx, :]
-        image = image[:, :, [2, 1, 0]]  # from BGR to RGB
-        image = self.transform(image)
+        #image = self.hdf['face_patch'][idx, :] ##(224,224,3)
+        image = self.hdf['face_patch'][img_index]
 
-        # Get labels
+        #image = image[:, :, [2, 1, 0]]  # from BGR to RGB
+        if self.transform is not None:
+            image = self.transform(image)
+        image = image.astype(np.float32)/255.0
+
+        self.gt_img_size = image.shape[0]
+        if self.gt_img_size != self.pred_img_size:
+            image = cv2.resize(image, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_LINEAR)
+
+        mask_img =  self.hdf['mask'][img_index]
+        eye_mask_img = self.hdf['eye_mask'][img_index]
+        if mask_img.shape[0] != self.pred_img_size:
+            mask_img = cv2.resize(mask_img, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+
+        if eye_mask_img.shape[0] != self.pred_img_size:
+            eye_mask_img = cv2.resize(eye_mask_img, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+        
+
+        image[mask_img < 0.5] = 1.0
+        img_tensor = (torch.from_numpy(image).permute(2, 0, 1)).unsqueeze(0).to(self.device)#not sure RGB or BRG
+        #img_tensor = (torch.from_numpy(image)).unsqueeze(0).to(self.device)#not sure RGB or BRG
+        mask_tensor = torch.from_numpy(mask_img[None, :, :]).unsqueeze(0).to(self.device)
+        eye_mask_tensor = torch.from_numpy(eye_mask_img[None, :, :]).unsqueeze(0).to(self.device)
+
+        
         if self.is_load_label:
-            gaze_label = self.hdf['face_gaze'][idx, :]
+            gaze_label = self.hdf['face_gaze'][img_index]
             gaze_label = gaze_label.astype('float')
-            return image, gaze_label
+            gaze_tensor = (torch.from_numpy(gaze_label)).to(self.device)
         else:
-            return image
+            gaze_tensor = torch.tensor([None,None])
 
+        camera_index = self.hdf['cam_index'][img_index][0]
+
+        camera_parameter = self.camera_loader[camera_index]  ##ground truth camera info
+
+        self.load_3dmm_params(img_index)
+
+        data_info = {
+                        'img' : img_tensor,
+                        'gaze': gaze_tensor,  ##only available in training set
+                        'camera_parameter': camera_parameter,
+                        '_3dmm': {'cam_info':self.cam_info,
+                                  'code_info':self.code_info},
+                        'img_mask' : mask_tensor,
+                        'eye_mask' : eye_mask_tensor
+                    }
+        return data_info
+
+    def load_3dmm_params(self,index):
+        # load init codes from the results generated by solving 3DMM rendering opt.
+        nl3dmm_para_dict = self.hdf['nl3dmm']
+
+        base_code = torch.from_numpy(nl3dmm_para_dict["code"][index]).float().detach().unsqueeze(0).to(self.device)
+        
+        base_iden = base_code[:, :self.opt.iden_code_dims]
+        base_expr = base_code[:, self.opt.iden_code_dims:self.opt.iden_code_dims + self.opt.expr_code_dims]
+        base_text = base_code[:, self.opt.iden_code_dims + self.opt.expr_code_dims:self.opt.iden_code_dims 
+                                                            + self.opt.expr_code_dims + self.opt.text_code_dims]
+        base_illu = base_code[:, self.opt.iden_code_dims + self.opt.expr_code_dims + self.opt.text_code_dims:]
+
+        self.base_c2w_Rmat =  torch.from_numpy(nl3dmm_para_dict["c2w_Rmat"][index]).float().detach().unsqueeze(0)
+        self.base_c2w_Tvec =  torch.from_numpy(nl3dmm_para_dict["c2w_Tvec"][index]).float().detach().unsqueeze(0).unsqueeze(-1)
+        self.base_w2c_Rmat =  torch.from_numpy(nl3dmm_para_dict["w2c_Rmat"][index]).float().detach().unsqueeze(0)
+        self.base_w2c_Tvec =  torch.from_numpy(nl3dmm_para_dict["w2c_Tvec"][index]).float().detach().unsqueeze(0).unsqueeze(-1)
+
+        temp_inmat =  torch.from_numpy(nl3dmm_para_dict["inmat"][index]).detach().unsqueeze(0)
+        temp_inmat[:, :2, :] *= (self.featmap_size / self.gt_img_size)
+        
+        temp_inv_inmat = torch.zeros_like(temp_inmat)
+        temp_inv_inmat[:, 0, 0] = 1.0 / temp_inmat[:, 0, 0]
+        temp_inv_inmat[:, 1, 1] = 1.0 / temp_inmat[:, 1, 1]
+        temp_inv_inmat[:, 0, 2] = -(temp_inmat[:, 0, 2] / temp_inmat[:, 0, 0])
+        temp_inv_inmat[:, 1, 2] = -(temp_inmat[:, 1, 2] / temp_inmat[:, 1, 1])
+        temp_inv_inmat[:, 2, 2] = 1.0
+        
+        #self.temp_inmat = temp_inmat
+        self.temp_inv_inmat = temp_inv_inmat
+
+        self.cam_info = {
+            "batch_Rmats": self.base_c2w_Rmat.to(self.device),
+            "batch_Tvecs": self.base_c2w_Tvec.to(self.device),
+            "batch_inv_inmats": self.temp_inv_inmat.to(self.device).float()
+        }
+
+        self.code_info = {
+            "base_iden" : base_iden,
+            "base_expr" : base_expr,
+            "base_text" : base_text,
+            "base_illu" : base_illu,
+            "inmat" : temp_inmat,
+            "inv_inmat" : temp_inv_inmat.float()
+        }
+
+    def debug_iter(self,idx):
+        key, idx = self.idx_to_kv[idx]
+
+        self.hdf = h5py.File(os.path.join(self.path,f'processed_{self.selected_keys[key]}'), 'r', swmr=True)
+        assert self.hdf.swmr_mode
+        img_index = idx
+
+        image = self.hdf['face_patch'][img_index]
+
+        #image = image[:, :, [2, 1, 0]]  # from BGR to RGB
+        if self.transform is not None:
+            image = self.transform(image)
+        image = image.astype(np.float32)/255.0
+
+        self.gt_img_size = image.shape[0]
+        if self.gt_img_size != self.pred_img_size:
+            image = cv2.resize(image, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_LINEAR)
+
+        mask_img =  self.hdf['mask'][img_index]
+        eye_mask_img = self.hdf['eye_mask'][img_index]
+        if mask_img.shape[0] != self.pred_img_size:
+            mask_img = cv2.resize(mask_img, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+
+        if eye_mask_img.shape[0] != self.pred_img_size:
+            eye_mask_img = cv2.resize(eye_mask_img, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+        
+
+        image[mask_img < 0.5] = 1.0
+        img_tensor = (torch.from_numpy(image).permute(2, 0, 1)).unsqueeze(0).to(self.device)#not sure RGB or BRG
+        #img_tensor = (torch.from_numpy(image)).unsqueeze(0).to(self.device)#not sure RGB or BRG
+        mask_tensor = torch.from_numpy(mask_img[None, :, :]).unsqueeze(0).to(self.device)
+        eye_mask_tensor = torch.from_numpy(eye_mask_img[None, :, :]).unsqueeze(0).to(self.device)
+
+        
+        if self.is_load_label:
+            gaze_label = self.hdf['face_gaze'][img_index]
+            gaze_label = gaze_label.astype('float')
+            gaze_tensor = (torch.from_numpy(gaze_label)).to(self.device)
+        else:
+            gaze_tensor = torch.tensor([None,None])
+
+        camera_index = self.hdf['cam_index'][img_index][0]
+
+        camera_parameter = self.camera_loader[camera_index]  ##ground truth camera info
+
+        self.load_3dmm_params(img_index)
+        import ipdb
+        ipdb.set_trace()
+        cv2.imshow('image mask', mask_img)
+        cv2.waitKey(0) 
+        cv2.destroyAllWindows() 
+        cv2.imshow('image after masking',image)
+        cv2.waitKey(0) 
+        cv2.destroyAllWindows() 
+        cv2.imshow('eye_mask',eye_mask_img)
+        cv2.waitKey(0) 
+        cv2.destroyAllWindows() 
 
 ################data loader for normalized data#############################
 class GazeDataset_normailzed(Dataset):

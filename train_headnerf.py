@@ -50,5 +50,6 @@ def run(config):
         trainer.test()
 
 if __name__ == '__main__':
+    torch.manual_seed(0)
     config, unparsed = get_config()
     run(config)

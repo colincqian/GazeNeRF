@@ -32,7 +32,8 @@ class DatasetforFitting3DMM(Dataset):
     
     def build_info(self):
         
-        img_path_list = [x for x in glob("%s/*.png" % self.img_dir) if "mask" not in x and not os.path.exists(x.replace(".png","_nl3dmm.pkl"))]
+        #img_path_list = [x for x in glob("%s/*.png" % self.img_dir) if "mask" not in x and not os.path.exists(x.replace(".png","_nl3dmm.pkl"))]
+        img_path_list = [x for x in glob("%s/*.png" % self.img_dir) if "mask" not in x ]
         img_path_list.sort()
         
         self.img_path_list = img_path_list
@@ -103,7 +104,7 @@ class DatasetforFitting3DMM(Dataset):
         
         return res_dict
     
-
+    
     def load_batch_sample(self, t_idx_list):
 
         img_list = []

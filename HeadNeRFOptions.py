@@ -35,18 +35,18 @@ class BaseOptions(object):
 
 
 dataset_config={
-    'dataset_path': './XGaze_Local/xgaze/',
+    'dataset_path': './XGaze_data/processed_data/',
     'opt': BaseOptions(),
-    'keys_to_use':['subject0000.h5'], 
+    'keys_to_use':['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008','subject0009','subject0010','subject0013'], 
     'sub_folder':'train',
-    'camera_dir':'./XGaze_Local/xgaze/camera_parameters',
-    '_3dmm_data_dir':'./XGaze_Local/normalized_250_data',
+    'camera_dir':'./XGaze_data/camera_parameters',
+    '_3dmm_data_dir':'./XGaze_data/normalized_250_data',
     'transform':None, 
     'is_shuffle':True,
     'index_file':None, 
     'is_load_label':True,
     'device': 'cpu',
-    'filter_view': True,
+    'filter_view': True
 
 }
 
@@ -78,9 +78,9 @@ data_arg.add_argument('--num_workers', type=int, default=5,
 train_arg = add_argument_group('Training Params')
 train_arg.add_argument('--is_train', type=str2bool, default=True,
                        help='Whether to train or test the model')
-train_arg.add_argument('--epochs', type=int, default=25,
+train_arg.add_argument('--epochs', type=int, default=26,
                        help='# of epochs to train for')
-train_arg.add_argument('--init_lr', type=float, default=0.00001,
+train_arg.add_argument('--init_lr', type=float, default=0.0001,
                        help='Initial learning rate value')
 train_arg.add_argument('--lr_patience', type=int, default=10,
                        help='Number of epochs to wait before reducing lr')
@@ -91,9 +91,11 @@ train_arg.add_argument('--lr_decay_factor', type=float, default=0.1,
 misc_arg = add_argument_group('Misc.')
 misc_arg.add_argument('--use_gpu', type=str2bool, default=True,
                       help="Whether to run on the GPU")
+misc_arg.add_argument('--gpu_id', type=int,default=-1,
+                      help='Which gpu to use')                    
 misc_arg.add_argument('--pre_trained_model_path', type=str, default='./ckpt/epoch_24_ckpt.pth.tar',
                       help='Directory in which to save model checkpoints')
-misc_arg.add_argument('--print_freq', type=int, default=50,
+misc_arg.add_argument('--print_freq', type=int, default=1,
                       help='How frequently to print training details')
 misc_arg.add_argument('--ckpt_dir', type=str, default='./logs/ckpt',
                       help='Directory in which to save model checkpoints')
@@ -106,9 +108,14 @@ misc_arg.add_argument('--use_gt_camera', type=str2bool, default=False,
 
 misc_arg.add_argument('--include_eye_gaze', type=str2bool, default=False,
                     help="Whether to include eye gaze as additional input to headnerf")
+misc_arg.add_argument('--eye_gaze_dimension', type=int, default=2,
+                      help='Decide to which dimension we would like eye gaze input to extend')
 
 misc_arg.add_argument('--resume', type=str, default='',
-                      help='whether to resume training, load saved ckpt')                   
+                      help='whether to resume training, load saved ckpt')        
+
+misc_arg.add_argument('--comment', type=str, default='',
+                      help='use comment to describ experiment')                
 
 def get_config():
     config, unparsed = parser.parse_known_args()

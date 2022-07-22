@@ -6,6 +6,7 @@ from torch.nn import L1Loss
 import lpips
 import torch
 
+from ignite.metrics import SSIM
 
 def calc_eval_metrics(pred_dict, gt_rgb, mask_tensor,eye_mask_tensor=None,vis=False):
     # head_mask = (mask_tensor >= 0.5)  
@@ -112,6 +113,11 @@ def compute_LPIPS(image1,image2):
     img2 = torch.from_numpy(image2.reshape(-1,3,h,w))
     d = loss_fn_alex(img1, img2).view(-1).cpu().detach().numpy()
     return d[0]
+
+def compute_PSNR_score_torch(image1,iamge2):
+    metric = SSIM(data_range=1.0)
+    
+
 
 
 if __name__=='__main__':

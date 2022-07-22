@@ -23,7 +23,7 @@ from Utils.RenderUtils import RenderUtils
 from Utils.Eval_utils import calc_eval_metrics
 from tqdm import tqdm
 import cv2
-
+from Utils.Log_utils import log
 
 
 class Trainer(object):
@@ -47,6 +47,10 @@ class Trainer(object):
         self.batch_size = config.batch_size
         self.use_gt_camera = config.use_gt_camera
         self.include_eye_gaze = config.include_eye_gaze
+        self.eye_gaze_dim = config.eye_gaze_dimension
+        if self.eye_gaze_dim%2 == 1:
+            #we need eye_gaze_dim to be even number
+            raise Exception("eye_gaze_dim expected to be even number!")
 
         # training params
         self.epochs = config.epochs  # the total epoch to train
@@ -59,6 +63,7 @@ class Trainer(object):
 
         # misc params
         self.use_gpu = config.use_gpu
+        self.gpu_id = config.gpu_id
         self.ckpt_dir = config.ckpt_dir  # output dir
         self.print_freq = config.print_freq
         self.train_iter = 0
@@ -79,21 +84,23 @@ class Trainer(object):
             para_dict = check_dict["para"]
             self.opt = BaseOptions(para_dict)
 
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=False)        
-            self.model.load_state_dict(check_dict["net"])
-            print(f'load model parameter from {self.headnerf_options}')
+            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=self.include_eye_gaze,eye_gaze_dim=self.eye_gaze_dim)  
+            self._load_model_parameter(check_dict)
+            print(f'load model parameter from {self.headnerf_options},set include_eye gaze to be {self.include_eye_gaze}')
         else:
             self.opt = BaseOptions()
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=self.include_eye_gaze)   
+            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=self.include_eye_gaze,eye_gaze_dim=self.eye_gaze_dim)   
             print(f'Train model from scratch, set include_eye gaze to be {self.include_eye_gaze}')     
         
         ##device setting
         if self.use_gpu and torch.cuda.device_count() > 0:
-            print("Let's use", torch.cuda.device_count(), "GPUs!")
+            print("Let's use", torch.cuda.device_count(), "GPUs!")  
+            if self.gpu_id >=0 :
+                torch.cuda.set_device(self.gpu_id)
             gpu_id = torch.cuda.current_device()
             self.device = torch.device("cuda:%d" % gpu_id)
             self.model.cuda()
-            print(f'GPU name:{torch.cuda.get_device_name(gpu_id)}')
+            print(f'GPU {str(gpu_id).zfill(2)} name:{torch.cuda.get_device_name(gpu_id)}')
         else:
             self.device = torch.device("cpu")
             
@@ -109,6 +116,20 @@ class Trainer(object):
         if self.resume:
             self.load_checkpoint(self.resume)
             
+    def _load_model_parameter(self,check_dict):
+        #dealing with extended model when include eye gaze input
+        if self.include_eye_gaze:
+            #weight list contains keys that needs to be extended when include eye_gaze in headnerf
+            weight_list = ["fg_CD_predictor.FeaExt_module_5.weight", "fg_CD_predictor.RGB_layer_1.weight","fg_CD_predictor.FeaExt_module_0.weight"]
+            for key in weight_list:
+                r,c,_,_ = check_dict["net"][key].size()
+                original_weight = check_dict["net"][key]
+                extended_weight = torch.zeros((r,self.eye_gaze_dim,1,1))
+                new_weight = torch.cat((original_weight,extended_weight),1)
+                assert new_weight.size(1) == c + self.eye_gaze_dim
+                check_dict["net"][key] = new_weight
+            print(f'Eye gaze feature dimension: {self.eye_gaze_dim}')
+        self.model.load_state_dict(check_dict["net"])
 
     def _build_tool_funcs(self):
         self.loss_utils = HeadNeRFLossUtils(device=self.device)
@@ -118,7 +139,6 @@ class Trainer(object):
         self.uv = self.render_utils.ray_uv.to(self.device).expand(self.batch_size,-1,-1)
 
     def build_code_and_cam_info(self,data_info):
-
         face_gaze = data_info['gaze'].float()
         mm3d_param = data_info['_3dmm']
         base_iden = mm3d_param['code_info']['base_iden'].squeeze(1)
@@ -127,6 +147,7 @@ class Trainer(object):
         base_illu = mm3d_param['code_info']['base_illu'].squeeze(1)
 
         if self.include_eye_gaze:
+            face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//2)
             shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
             appea_code = torch.cat([base_text, base_illu,face_gaze], dim=-1) ##test
         else:
@@ -157,6 +178,7 @@ class Trainer(object):
         return code_info,cam_info
     
     def train(self):
+        self.logging_config('./logs')
         for epoch in range(self.start_epoch,self.epochs):
             print(
                 '\nEpoch: {}/{} - base LR: {:.6f}'.format(
@@ -187,9 +209,11 @@ class Trainer(object):
                  }, add=add_file_name
             )
 
-            
+            val_dic['ckpt_name'] = add_file_name
+            self.logging_config('./logs',val_dic)
 
             self.scheduler.step() 
+
 
         self.writer.close()
     
@@ -210,20 +234,18 @@ class Trainer(object):
                     delta_cam_info=None, opt_code_dict=None, pred_dict=pred_dict, 
                     gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device),eye_mask_tensor=eye_mask.to(self.device)
                 )
-
+            
 
             self.optimizer.zero_grad()
             batch_loss_dict["total_loss"].backward()
             self.optimizer.step()
 
-            
+
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-
+            
             loop_bar.set_description("Opt, Head_loss/Eye_loss: %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["eye_loss"].item()) )  
-            # except:
-            #     print(f'batch bug occurs!xy_size:{self.xy.size()},uv_size:{self.uv.size()}')
 
 
                 
@@ -236,11 +258,13 @@ class Trainer(object):
         }
         count = 0
         loop_bar = enumerate(self.val_loader)
+        xy = self.render_utils.ray_xy.to(self.device).expand(self.val_loader.batch_size,-1,-1)
+        uv = self.render_utils.ray_uv.to(self.device).expand(self.val_loader.batch_size,-1,-1)
         for iter,data_info in loop_bar:
             with torch.set_grad_enabled(False):
                 code_info,cam_info = self.build_code_and_cam_info(data_info)
 
-                pred_dict = self.model( "test", self.xy, self.uv,  **code_info, **cam_info)
+                pred_dict = self.model( "test", xy, uv,  **code_info, **cam_info)
 
                 gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
 
@@ -311,4 +335,37 @@ class Trainer(object):
         # cv2.waitKey(0) 
         # #closing all open windows 
         # cv2.destroyAllWindows() 
+    
+    def logging_config(self,log_path,val_dict={}):
+        from datetime import datetime
+        if not val_dict :
+            now = datetime.now()       
+            print("now =", now)
+            self.logger = log(path=log_path,file=f'{now}_training_log_file.logs')
+
+            config_list=['batch_size','init_lr','epochs','ckpt_dirs','include_eye_gaze','eye_gaze_dimension','comment']
+            self.logger.info("----Training configuration----")
+            for k,v in self.config.__dict__.items():
+                if k in config_list:
+                    self.logger.info(str(k) + ' : ' + str(v))
+            self.logger.info("--------------------------------------------------")
+        else: 
+            self.logger.info("Evaluation Results")
+            for k,v in val_dict.items():
+                self.logger.info(str(k) + ' = ' + str(v))
+            self.logger.info("--------------------------------------------------")
+
+
+        
+
+
+if __name__ == '__main__':
+    check_dict = torch.load("TrainedModels/model_Reso32.pth", map_location=torch.device("cpu"))
+    para_dict = check_dict["para"]
+    opt = BaseOptions(para_dict)
+    model = HeadNeRFNet(opt, include_vd=False, hier_sampling=False,include_gaze=True)  
+    import ipdb
+    ipdb.set_trace()
+    model.load_state_dict(check_dict["net"])
+
 
