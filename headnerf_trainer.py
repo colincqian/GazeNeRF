@@ -120,7 +120,8 @@ class Trainer(object):
         #dealing with extended model when include eye gaze input
         if self.include_eye_gaze:
             #weight list contains keys that needs to be extended when include eye_gaze in headnerf
-            weight_list = ["fg_CD_predictor.FeaExt_module_5.weight", "fg_CD_predictor.RGB_layer_1.weight","fg_CD_predictor.FeaExt_module_0.weight"]
+            weight_list = ["fg_CD_predictor.FeaExt_module_5.weight","fg_CD_predictor.FeaExt_module_0.weight"]
+            #weight_list = ["fg_CD_predictor.FeaExt_module_5.weight", "fg_CD_predictor.RGB_layer_1.weight","fg_CD_predictor.FeaExt_module_0.weight"]
             for key in weight_list:
                 r,c,_,_ = check_dict["net"][key].size()
                 original_weight = check_dict["net"][key]
@@ -149,7 +150,7 @@ class Trainer(object):
         if self.include_eye_gaze:
             face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//2)
             shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
-            appea_code = torch.cat([base_text, base_illu,face_gaze], dim=-1) ##test
+            appea_code = torch.cat([base_text, base_illu], dim=-1) ##test
         else:
             shape_code = torch.cat([base_iden, base_expr], dim=-1)
             appea_code = torch.cat([base_text, base_illu], dim=-1) ##test
