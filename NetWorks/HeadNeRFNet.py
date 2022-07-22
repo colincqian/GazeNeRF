@@ -59,7 +59,7 @@ class HeadNeRFNet(nn.Module):
             vd_channels += tv
             self.vd_encoder = Embedder(N_freqs=self.vd_n_freqs, include_input=self.include_input_for_vd_embeder)
         if self.include_gaze:
-            vd_channels += self.eye_gaze_dim
+            vd_channels += 0 #self.eye_gaze_dim
                 
         
         self.sample_func = GenSamplePoints(self.opt)

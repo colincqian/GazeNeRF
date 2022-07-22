@@ -178,7 +178,8 @@ class FittingImage(object):
         # code
         if self.include_eye_gaze:
             shape_code = torch.cat([self.base_iden + self.iden_offset, self.base_expr + self.expr_offset,self.base_gaze + self.gaze_offset], dim=-1)
-            appea_code = torch.cat([self.base_text, self.base_illu, self.base_gaze], dim=-1) + self.appea_offset
+            #appea_code = torch.cat([self.base_text, self.base_illu, self.base_gaze], dim=-1) + self.appea_offset
+            appea_code = torch.cat([self.base_text, self.base_illu], dim=-1) + self.appea_offset
         else:
             shape_code = torch.cat([self.base_iden + self.iden_offset, self.base_expr + self.expr_offset], dim=-1)
             appea_code = torch.cat([self.base_text, self.base_illu], dim=-1) + self.appea_offset
@@ -245,7 +246,7 @@ class FittingImage(object):
         if self.include_eye_gaze:
             self.gaze_offset = torch.zeros((1, self.eye_gaze_dim), dtype=torch.float32).to(self.device)
             self.enable_gradient([self.gaze_offset])
-            self.appea_offset = torch.cat((self.appea_offset,torch.zeros(1,self.eye_gaze_dim,device = self.device)),dim=1)
+            #self.appea_offset = torch.cat((self.appea_offset,torch.zeros(1,self.eye_gaze_dim,device = self.device)),dim=1)
 
         if self.opt_cam:
             self.enable_gradient(
@@ -344,12 +345,12 @@ class FittingImage(object):
         # shape_code[0,-self.eye_gaze_dim:] = -shape_code[0,-self.eye_gaze_dim:]
         # appea_code[0,-self.eye_gaze_dim:] = -appea_code[0,-self.eye_gaze_dim:]
         shape_code[0,-self.eye_gaze_dim:] = torch.ones(self.eye_gaze_dim)
-        appea_code[0,-self.eye_gaze_dim:] = torch.ones(self.eye_gaze_dim)
+        #appea_code[0,-self.eye_gaze_dim:] = torch.ones(self.eye_gaze_dim)
         self.tar_code_info['shape_code'] = shape_code.clone().detach()
         self.tar_code_info['appea_code'] = appea_code.clone().detach()
         self.tar_code_info['bg_code'] = None
         shape_code[0,-self.eye_gaze_dim:] = -torch.ones(self.eye_gaze_dim)
-        appea_code[0,-self.eye_gaze_dim:] = -torch.ones(self.eye_gaze_dim)
+        #appea_code[0,-self.eye_gaze_dim:] = -torch.ones(self.eye_gaze_dim)
         self.res_code_info['shape_code'] = shape_code.clone().detach()
         self.res_code_info['appea_code'] = appea_code.clone().detach()
 
