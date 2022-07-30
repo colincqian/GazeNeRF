@@ -17,6 +17,7 @@ import argparse
 from tool_funcs import put_text_alignmentcenter
 import h5py
 
+
 class FittingImage(object):
     
     def __init__(self, model_path, save_root, gpu_id, include_eye_gaze=True, eye_gaze_dim=16) -> None:
@@ -349,7 +350,7 @@ class FittingImage(object):
         self.tar_code_info['shape_code'] = shape_code.clone().detach()
         self.tar_code_info['appea_code'] = appea_code.clone().detach()
         self.tar_code_info['bg_code'] = None
-        shape_code[0,-self.eye_gaze_dim:] = -torch.ones(self.eye_gaze_dim)
+        shape_code[0,-self.eye_gaze_dim:] = torch.zeros(self.eye_gaze_dim)
         #appea_code[0,-self.eye_gaze_dim:] = -torch.ones(self.eye_gaze_dim)
         self.res_code_info['shape_code'] = shape_code.clone().detach()
         self.res_code_info['appea_code'] = appea_code.clone().detach()
@@ -358,10 +359,18 @@ class FittingImage(object):
 
 
 
-        morph_res = self.render_utils.render_gaze_redirect_res(self.net, self.res_code_info, self.tar_code_info, self.view_num,self.eye_gaze_dim)
+        morph_res,vec_results = self.render_utils.render_gaze_redirect_res(self.net, self.res_code_info, self.tar_code_info, self.view_num,self.eye_gaze_dim)
         #morph_res = self.render_utils.render_morphing_res(self.net, self.res_code_info, self.tar_code_info, self.view_num)
         morph_save_path = "%s/FittingResMorphing_%s.gif" % (save_root, base_name)
         imageio.mimsave(morph_save_path, morph_res, 'GIF', duration=self.duration)
+
+        image_vec_path = "%s/image_seq/" % (save_root)
+        if not os.path.exists(image_vec_path):
+            os.mkdir(image_vec_path)
+        for ind,img_vec in enumerate(vec_results):
+            cv2.imwrite(os.path.join(image_vec_path,f"image{ind}.png"),img_vec)
+
+
 
         for k, v in self.res_code_info.items():
             if isinstance(v, torch.Tensor):
