@@ -148,6 +148,7 @@ class Trainer(object):
         base_illu = mm3d_param['code_info']['base_illu'].squeeze(1)
 
         if self.include_eye_gaze:
+            face_gaze = 0.5 + face_gaze/2 #normalized between 0 to 1    
             face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//2)
             shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
             appea_code = torch.cat([base_text, base_illu], dim=-1) ##test
