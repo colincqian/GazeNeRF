@@ -187,10 +187,12 @@ class RenderUtils(object):
             except:
                 print(f'error occurs at gaze{input_gaze_np}')
             cv2.putText(img=face_patch_gaze, text=str(input_gaze_np), org=(0, 75), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(255, 0, 0),thickness=1)
+            
+            res_img_list.append(face_patch_gaze)
             face_patch_gaze = cv2.cvtColor(face_patch_gaze, cv2.COLOR_BGR2RGB)
 
-        
             res_imgvec_list.append(face_patch_gaze)
-            res_img_list.append(coarse_fg_rgb)
+            #res_img_list.append(coarse_fg_rgb)
+            
             
         return res_img_list,res_imgvec_list
