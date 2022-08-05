@@ -15,7 +15,7 @@ class Gen2DLandmarks(object):
         self.fa_func = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, flip_input=False)
         
         
-    def main_process(self, img_dir):
+    def main_process(self, img_dir,visualization=False,save_file=True):
         
         img_path_list = [x for x in glob("%s/*.png" % img_dir) if "mask" not in x and not os.path.exists(x.replace(".png","_lm2d.txt"))]
         
@@ -24,6 +24,7 @@ class Gen2DLandmarks(object):
             exit(0)
         
         img_path_list.sort()
+        prev = None
 
         for img_path in tqdm(img_path_list, desc="Generate facial landmarks"):
             
@@ -40,11 +41,30 @@ class Gen2DLandmarks(object):
         
             preds = res[0]
             
+            if visualization:
+                #index between 36:48 represent eye region!!!
+                for row in range(preds.shape[0]):
+                    pos = preds[row,:]
+                    cv2.circle(img_rgb, tuple(pos.astype(int)), 2, (0, 255, 0), -1)
+                if prev is not None:
+                    dist_eye = np.sum(np.linalg.norm(preds[36:48] - prev[36:48],axis=1))/12
+                    print(f'Average displacement of the eye region is {dist_eye}')
 
-            with open(save_path, "w") as f:
-                for tt in preds:
-                    f.write("%f \n"%(tt[0]))
-                    f.write("%f \n"%(tt[1]))
+                    dist = (np.sum(np.linalg.norm(preds-prev,axis=1)) - 12 * dist_eye)/(preds.shape[0] - 12)
+                    print(f'Average displacement of the non-eye region is {dist}')
+
+                prev = preds.copy()
+
+                cv2.imshow('current rendering', img_rgb)
+                cv2.waitKey(0) 
+                #closing all open windows 
+                cv2.destroyAllWindows()  
+                
+            if save_file:
+                with open(save_path, "w") as f:
+                    for tt in preds:
+                        f.write("%f \n"%(tt[0]))
+                        f.write("%f \n"%(tt[1]))
 
     def process_single_image(self,img_rgb):
         img_rgb = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2RGB)
@@ -56,10 +76,25 @@ class Gen2DLandmarks(object):
     
         preds = res[0]
         return preds.reshape((-1)) #flatten landmarks
+    
+
+    def visualize_landmarks(self,img_rgb):
+        img_rgb = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2RGB)
+        res = self.fa_func.get_landmarks(img_rgb)
         
+        if res is None:
+            print("Warning: can't predict the landmark info of image" )
+            return None
+    
+        preds = res[0]
 
-
-
+        for row in range(preds.shape[0]):
+            pos = preds[row,:]
+            cv2.circle(img_rgb, tuple(pos.astype(int)), 2, (0, 255, 0), -1)
+            cv2.imshow('current rendering', img_rgb)
+            cv2.waitKey(0) 
+            #closing all open windows 
+            cv2.destroyAllWindows() 
 
         
 
@@ -71,5 +106,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     tt = Gen2DLandmarks()
-    tt.main_process(args.img_dir)
+    tt.main_process(args.img_dir,visualization=True,save_file=False)
     

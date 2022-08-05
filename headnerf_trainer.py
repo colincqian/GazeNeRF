@@ -219,6 +219,17 @@ class Trainer(object):
 
         self.writer.close()
     
+    def eye_gaze_displacement(self,code_info,cam_info):
+        original_eye_gaze = code_info['shape_code'][0,-self.eye_gaze_dim:]
+        theta = original_eye_gaze[0];phi = original_eye_gaze[1]
+        theta_p = theta + torch.normal(0,min(abs(1-theta),abs(theta)))
+        phi_p = phi + torch.normal(0,min(abs(1-phi),abs(phi)))
+        code_info['shape_code'][0,-self.eye_gaze_dim:] = torch.tensor([theta_p,phi_p]).repeat(1,self.eye_gaze_dim//2)
+        
+        pred_dict_p = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
+
+        return pred_dict_p,(theta_p,phi_p)
+
 
     def train_one_epoch(self, epoch, data_loader, is_train=True):
         loop_bar = tqdm(enumerate(data_loader), leave=False, total=len(data_loader))
@@ -228,6 +239,8 @@ class Trainer(object):
                 code_info,cam_info = self.build_code_and_cam_info(data_info)
 
                 pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
+
+                disp_pred_dict = self.eye_gaze_displacement(code_info,cam_info)
 
                 gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
 
