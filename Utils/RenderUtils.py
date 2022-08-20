@@ -11,7 +11,10 @@ import math
 
 import sys
 sys.path.insert(1, '/home/colinqian/Project/ETH-XGaze/ETH-XGaze')
-from demo import face_gaze_estimiator,draw_gaze
+try:
+    from demo import face_gaze_estimiator,draw_gaze
+except:
+    pass
 
 class RenderUtils(object):
     def __init__(self, view_num, device, opt: BaseOptions) -> None:
