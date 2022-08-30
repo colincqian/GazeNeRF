@@ -20,7 +20,7 @@ import h5py
 
 class FittingImage(object):
     
-    def __init__(self, model_path, save_root, gpu_id, include_eye_gaze=True, eye_gaze_dim=16,gaze_scale_factor=1) -> None:
+    def __init__(self, model_path, save_root, gpu_id, include_eye_gaze=True, eye_gaze_dim=16,gaze_scale_factor=1,vis_vect=False) -> None:
         super().__init__()
         self.model_path = model_path
 
@@ -34,6 +34,7 @@ class FittingImage(object):
         self.include_eye_gaze = include_eye_gaze
         self.eye_gaze_dim = eye_gaze_dim
         self.scale_factor = gaze_scale_factor
+        self.vis_vect = vis_vect
         
 
         self.build_info()
@@ -356,11 +357,7 @@ class FittingImage(object):
         self.res_code_info['shape_code'] = shape_code.clone().detach()
         self.res_code_info['appea_code'] = appea_code.clone().detach()
 
-
-
-
-
-        morph_res,vec_results = self.render_utils.render_gaze_redirect_res(self.net, self.res_code_info, self.tar_code_info, self.view_num,self.scale_factor,vis_vect=False)
+        morph_res,vec_results = self.render_utils.render_gaze_redirect_res(self.net, self.res_code_info, self.tar_code_info, self.view_num,self.scale_factor,vis_vect=self.vis_vect)
         #morph_res = self.render_utils.render_morphing_res(self.net, self.res_code_info, self.tar_code_info, self.view_num)
         morph_save_path = "%s/FittingResMorphing_%s.gif" % (save_root, base_name)
         imageio.mimsave(morph_save_path, morph_res, 'GIF', duration=self.duration)
@@ -405,6 +402,8 @@ class FittingImage(object):
         #closing all open windows 
         cv2.destroyAllWindows() 
 
+def str2bool(v):
+    return v.lower() in ('true', '1')
 
 if __name__ == "__main__":
     torch.manual_seed(45)  # cpu
@@ -426,6 +425,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_root", type=str, required=True)
 
     parser.add_argument("--eye_gaze_scale_factor", type=int, default=1)
+    parser.add_argument("--vis_gaze_vect", type=str2bool, required=True,help='whether to visualize the gaze vector in result images')
     
     args = parser.parse_args()
 
@@ -437,6 +437,7 @@ if __name__ == "__main__":
     image_index = args.image_index
     gaze_feat_dim = args.gaze_dim
     scale_factor = args.eye_gaze_scale_factor
+    vis_vect = args.vis_gaze_vect
     
     # if len(args.target_embedding) == 0:
     #     target_embedding_path = None
@@ -450,5 +451,5 @@ if __name__ == "__main__":
         
     #     assert os.path.exists(target_embedding_path)
     
-    tt = FittingImage(model_path, save_root, gpu_id=0,include_eye_gaze=True,eye_gaze_dim=gaze_feat_dim,gaze_scale_factor=scale_factor)
+    tt = FittingImage(model_path, save_root, gpu_id=0,include_eye_gaze=True,eye_gaze_dim=gaze_feat_dim,gaze_scale_factor=scale_factor,vis_vect=vis_vect)
     tt.fitting_single_images(hdf_file,image_index, save_root)
