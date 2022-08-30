@@ -26,7 +26,7 @@ class Gen2DLandmarks(object):
         img_path_list.sort()
         prev = None
 
-        for img_path in tqdm(img_path_list, desc="Generate facial landmarks"):
+        for idx,img_path in tqdm(enumerate(img_path_list), desc="Generate facial landmarks"):
             
             img_bgr = cv2.imread(img_path)
             img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
@@ -45,7 +45,7 @@ class Gen2DLandmarks(object):
                 #index between 36:48 represent eye region!!!
                 for row in range(preds.shape[0]):
                     pos = preds[row,:]
-                    cv2.circle(img_rgb, tuple(pos.astype(int)), 2, (0, 255, 0), -1)
+                    cv2.circle(img_rgb, tuple(pos.astype(int)+np.random.normal(0,sigma,2).astype(int)), 2, (0, 255, 0), -1)
                 if prev is not None:
                     dist_eye = np.sum(np.linalg.norm(preds[36:48] - prev[36:48],axis=1))/12
                     print(f'Average displacement of the eye region is {dist_eye}')
@@ -54,11 +54,12 @@ class Gen2DLandmarks(object):
                     print(f'Average displacement of the non-eye region is {dist}')
 
                 prev = preds.copy()
-
-                cv2.imshow('current rendering', img_rgb)
-                cv2.waitKey(0) 
-                #closing all open windows 
-                cv2.destroyAllWindows()  
+                #img_rgb = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2RGB)
+                # cv2.imshow('current rendering', img_rgb)
+                # cv2.waitKey(0) 
+                # #closing all open windows 
+                # cv2.destroyAllWindows()  
+                cv2.imwrite(f'/home/colinqian/Project/HeadNeRF/lm_detection/{idx}.png',img_rgb)
                 
             if save_file:
                 with open(save_path, "w") as f:
