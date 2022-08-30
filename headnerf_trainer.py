@@ -52,6 +52,7 @@ class Trainer(object):
             #we need eye_gaze_dim to be even number
             raise Exception("eye_gaze_dim expected to be even number!")
         self.eye_gaze_scale_factor = config.eye_gaze_scale_factor
+        self.disentangle = config.eye_gaze_disentangle
 
         # training params
         self.epochs = config.epochs  # the total epoch to train
@@ -149,7 +150,7 @@ class Trainer(object):
         base_illu = mm3d_param['code_info']['base_illu'].squeeze(1)
 
         if self.include_eye_gaze:
-            face_gaze = (0.5 + face_gaze/2) * self.eye_gaze_scale_factor #normalized between 0 to 1    
+            face_gaze = (face_gaze) * self.eye_gaze_scale_factor #normalized between 0 to 1    
             face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//2)
             shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
             appea_code = torch.cat([base_text, base_illu], dim=-1) ##test
@@ -240,8 +241,11 @@ class Trainer(object):
                 code_info,cam_info = self.build_code_and_cam_info(data_info)
 
                 pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
-
-                disp_pred_dict,disp_gaze = self.eye_gaze_displacement(code_info,cam_info)
+                
+                if self.disentangle:
+                    disp_pred_dict,disp_gaze = self.eye_gaze_displacement(code_info,cam_info)
+                else:
+                    disp_pred_dict = None
 
                 gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
 
@@ -251,11 +255,9 @@ class Trainer(object):
                     gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device),eye_mask_tensor=eye_mask.to(self.device)
                 )
             
-
             self.optimizer.zero_grad()
             batch_loss_dict["total_loss"].backward()
             self.optimizer.step()
-
 
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
