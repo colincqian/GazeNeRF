@@ -229,7 +229,7 @@ class HeadNeRFLossUtils(object):
         
         if disp_pred_dict is not None and eye_mask_tensor is not None:
             loss_dict.update(self.calc_disp_loss(pred_dict["coarse_dict"],disp_pred_dict["coarse_dict"],non_eye_mask_tensor=noneye_mask))
-            total_loss += 1 * loss_dict["image_disp_loss"] + \
+            total_loss += 3 * loss_dict["image_disp_loss"] + \
                           1 * loss_dict["lm_disp_loss"]
 
         loss_dict["total_loss"] = total_loss
