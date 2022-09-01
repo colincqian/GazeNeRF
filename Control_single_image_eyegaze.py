@@ -20,7 +20,7 @@ import h5py
 
 class FittingImage(object):
     
-    def __init__(self, model_path, save_root, gpu_id, include_eye_gaze=True, eye_gaze_dim=16) -> None:
+    def __init__(self, model_path, save_root, gpu_id, include_eye_gaze=True, eye_gaze_dim=16,gaze_scale_factor=1,vis_vect=False) -> None:
         super().__init__()
         self.model_path = model_path
 
@@ -33,6 +33,9 @@ class FittingImage(object):
         self.model_name = os.path.basename(model_path)[:-4]
         self.include_eye_gaze = include_eye_gaze
         self.eye_gaze_dim = eye_gaze_dim
+        self.scale_factor = gaze_scale_factor
+        self.vis_vect = vis_vect
+        
 
         self.build_info()
         self.build_tool_funcs()
@@ -261,7 +264,7 @@ class FittingImage(object):
         init_learn_rate = 0.01
         
         step_decay = 300
-        iter_num = 3
+        iter_num = 1
         
         params_group = [
             {'params': [self.iden_offset], 'lr': init_learn_rate * 1.5},
@@ -289,7 +292,6 @@ class FittingImage(object):
         for iter_ in loop_bar:
             with torch.set_grad_enabled(True):
                 code_info, opt_code_dict, cam_info, delta_cam_info = self.build_code_and_cam()
-
                 pred_dict = self.net( "test", self.xy, self.uv,  **code_info, **cam_info)
                 #input: xy: torch.Size([1, 2, 1024]),   uv:torch.Size([1, 1024, 2]) 
                 #code info: appea: torch.Size([1, 127]), shape:torch.Size([1, 179])
@@ -298,7 +300,7 @@ class FittingImage(object):
 
                 
                 batch_loss_dict = self.loss_utils.calc_total_loss(
-                    delta_cam_info=delta_cam_info, opt_code_dict=opt_code_dict, pred_dict=pred_dict, 
+                    delta_cam_info=delta_cam_info, opt_code_dict=opt_code_dict, pred_dict=pred_dict, disp_pred_dict=None,
                     gt_rgb=self.img_tensor, mask_tensor=self.mask_tensor
                 )
 
@@ -345,21 +347,17 @@ class FittingImage(object):
         appea_code = self.res_code_info['appea_code'].clone().detach()
         # shape_code[0,-self.eye_gaze_dim:] = -shape_code[0,-self.eye_gaze_dim:]
         # appea_code[0,-self.eye_gaze_dim:] = -appea_code[0,-self.eye_gaze_dim:]
-        shape_code[0,-self.eye_gaze_dim:] = torch.ones(self.eye_gaze_dim)
+        shape_code[0,-self.eye_gaze_dim:] = torch.ones(self.eye_gaze_dim) * self.scale_factor
         #appea_code[0,-self.eye_gaze_dim:] = torch.ones(self.eye_gaze_dim)
         self.tar_code_info['shape_code'] = shape_code.clone().detach()
         self.tar_code_info['appea_code'] = appea_code.clone().detach()
         self.tar_code_info['bg_code'] = None
-        shape_code[0,-self.eye_gaze_dim:] = torch.zeros(self.eye_gaze_dim)
+        shape_code[0,-self.eye_gaze_dim:] = -torch.ones(self.eye_gaze_dim)
         #appea_code[0,-self.eye_gaze_dim:] = -torch.ones(self.eye_gaze_dim)
         self.res_code_info['shape_code'] = shape_code.clone().detach()
         self.res_code_info['appea_code'] = appea_code.clone().detach()
 
-
-
-
-
-        morph_res,vec_results = self.render_utils.render_gaze_redirect_res(self.net, self.res_code_info, self.tar_code_info, self.view_num,self.eye_gaze_dim)
+        morph_res,vec_results = self.render_utils.render_gaze_redirect_res(self.net, self.res_code_info, self.tar_code_info, self.view_num,self.scale_factor,vis_vect=self.vis_vect)
         #morph_res = self.render_utils.render_morphing_res(self.net, self.res_code_info, self.tar_code_info, self.view_num)
         morph_save_path = "%s/FittingResMorphing_%s.gif" % (save_root, base_name)
         imageio.mimsave(morph_save_path, morph_res, 'GIF', duration=self.duration)
@@ -404,6 +402,8 @@ class FittingImage(object):
         #closing all open windows 
         cv2.destroyAllWindows() 
 
+def str2bool(v):
+    return v.lower() in ('true', '1')
 
 if __name__ == "__main__":
     torch.manual_seed(45)  # cpu
@@ -423,6 +423,9 @@ if __name__ == "__main__":
     parser.add_argument("--gaze_dim", type=int, required=True)
 
     parser.add_argument("--save_root", type=str, required=True)
+
+    parser.add_argument("--eye_gaze_scale_factor", type=int, default=1)
+    parser.add_argument("--vis_gaze_vect", type=str2bool, required=True,help='whether to visualize the gaze vector in result images')
     
     args = parser.parse_args()
 
@@ -433,6 +436,8 @@ if __name__ == "__main__":
     hdf_file = args.hdf_file
     image_index = args.image_index
     gaze_feat_dim = args.gaze_dim
+    scale_factor = args.eye_gaze_scale_factor
+    vis_vect = args.vis_gaze_vect
     
     # if len(args.target_embedding) == 0:
     #     target_embedding_path = None
@@ -446,5 +451,5 @@ if __name__ == "__main__":
         
     #     assert os.path.exists(target_embedding_path)
     
-    tt = FittingImage(model_path, save_root, gpu_id=0,include_eye_gaze=True,eye_gaze_dim=gaze_feat_dim)
+    tt = FittingImage(model_path, save_root, gpu_id=0,include_eye_gaze=True,eye_gaze_dim=gaze_feat_dim,gaze_scale_factor=scale_factor,vis_vect=vis_vect)
     tt.fitting_single_images(hdf_file,image_index, save_root)

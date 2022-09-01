@@ -110,6 +110,10 @@ misc_arg.add_argument('--include_eye_gaze', type=str2bool, default=False,
                     help="Whether to include eye gaze as additional input to headnerf")
 misc_arg.add_argument('--eye_gaze_dimension', type=int, default=2,
                       help='Decide to which dimension we would like eye gaze input to extend')
+misc_arg.add_argument('--eye_gaze_scale_factor', type=int, default=1,
+                      help='Decide to how much you want to scale normalized face gaze')
+misc_arg.add_argument('--eye_gaze_disentangle', type=str2bool, default=True,
+                      help='Decide to whether to use disentangle module for eye gaze (high computational cost)')
 
 misc_arg.add_argument('--resume', type=str, default='',
                       help='whether to resume training, load saved ckpt')        

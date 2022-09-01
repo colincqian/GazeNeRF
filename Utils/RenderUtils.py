@@ -11,7 +11,10 @@ import math
 
 import sys
 sys.path.insert(1, '/home/colinqian/Project/ETH-XGaze/ETH-XGaze')
-from demo import face_gaze_estimiator,draw_gaze
+try:
+    from demo import face_gaze_estimiator,draw_gaze
+except:
+    pass
 
 class RenderUtils(object):
     def __init__(self, view_num, device, opt: BaseOptions) -> None:
@@ -147,7 +150,7 @@ class RenderUtils(object):
             
         return res_img_list
 
-    def render_gaze_redirect_res(self, net, code_info_1, code_info_2, nums, gaze_dim):
+    def render_gaze_redirect_res(self, net, code_info_1, code_info_2, nums, scale_factor,vis_vect=True):
         ##code1 and code2 only have difference in last few columns (gaze tensor)
         batch_xy = self.ray_xy
         batch_uv = self.ray_uv
@@ -171,26 +174,44 @@ class RenderUtils(object):
             
             with torch.set_grad_enabled(False):
                 pred_dict = net("test",batch_xy, batch_uv, **code_info,**self.base_cam_info)
+
+            inmat_np = torch.linalg.inv(self.base_cam_info['batch_inv_inmats']).detach().cpu().numpy()
+            inmat_np = inmat_np.reshape((3,3))
+            distortion_np = np.zeros([1,5])
+            inmat_np[0,0] *=10; inmat_np[1,1] *=10; inmat_np[0,2] *=10; inmat_np[1,2] *=10
+            cam_info = {'camera_matrix':inmat_np, 'camera_distortion':distortion_np}
+            
+
             coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
             coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
-            coarse_fg_rgb = cv2.cvtColor(coarse_fg_rgb, cv2.COLOR_BGR2RGB)
 
+            if vis_vect:
+                face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
+                cv2.putText(img=face_patch_gaze, text=str(pred_gaze_np), org=(0, 50), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(255, 0, 0),thickness=1)
+                
+                # cv2.imshow('current rendering', face_patch_gaze)
+                # cv2.waitKey(0) 
+                # #closing all open windows 
+                # cv2.destroyAllWindows()  
 
-            face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb)
-            cv2.putText(img=face_patch_gaze, text=str(pred_gaze_np), org=(0, 50), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(0, 0, 255),thickness=1)
+                input_gaze_np = shape_code[0,-2:].detach().cpu().numpy()
+                #input_gaze_np = input_gaze_np * 2 / scale_factor - 1 #map from [0,1] to [-1,1]
+                #input_gaze_np = input_gaze_np/np.linalg.norm(input_gaze_np)
+                try:
+                    face_patch_gaze = draw_gaze(face_patch_gaze,input_gaze_np,color=(0,0,255))
+                except:
+                    print(f'error occurs at gaze{input_gaze_np}')
+                cv2.putText(img=face_patch_gaze, text=str(input_gaze_np), org=(0, 75), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(0, 0, 255),thickness=1)
+                
+
+                res_imgvec_list.append(face_patch_gaze)
+                face_patch_gaze = cv2.cvtColor(face_patch_gaze, cv2.COLOR_BGR2RGB)
+                res_img_list.append(face_patch_gaze)
+            else:
+                res_imgvec_list.append(coarse_fg_rgb)
+                coarse_fg_rgb = cv2.cvtColor(coarse_fg_rgb, cv2.COLOR_BGR2RGB)
+                res_img_list.append(coarse_fg_rgb)
+                
             
-            input_gaze_np = shape_code[0,-2:].detach().cpu().numpy()
-            input_gaze_np = input_gaze_np * 2 - 1 #map from [0,1] to [-1,1]
-            #input_gaze_np = input_gaze_np/np.linalg.norm(input_gaze_np)
-            try:
-                face_patch_gaze = draw_gaze(face_patch_gaze,input_gaze_np,color=(255,0,0))
-            except:
-                print(f'error occurs at gaze{input_gaze_np}')
-            cv2.putText(img=face_patch_gaze, text=str(input_gaze_np), org=(0, 75), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(255, 0, 0),thickness=1)
-            face_patch_gaze = cv2.cvtColor(face_patch_gaze, cv2.COLOR_BGR2RGB)
-
-        
-            res_imgvec_list.append(face_patch_gaze)
-            res_img_list.append(coarse_fg_rgb)
             
         return res_img_list,res_imgvec_list
