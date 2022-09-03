@@ -1,5 +1,6 @@
 from os.path import join
 import os
+from tracemalloc import start
 import torch
 import numpy as np
 from NetWorks.HeadNeRFNet import HeadNeRFNet
@@ -16,6 +17,15 @@ import random
 import argparse
 from tool_funcs import put_text_alignmentcenter
 import h5py
+
+#define eye gaze base
+UPPER_RIGHT = torch.tensor([1,-1])
+UPPER_LEFT = torch.tensor([1,1])
+LOWER_RIGHT = torch.tensor([-1,-1])
+LOWER_LEFT = torch.tensor([-1,1])
+
+def gaze_feat_tensor(gaze_dim,scale_factor,base_gaze_value):
+    return base_gaze_value.repeat(1,gaze_dim//2) * scale_factor
 
 
 class FittingImage(object):
@@ -343,32 +353,42 @@ class FittingImage(object):
         cv2.imwrite(img_save_path, self.res_img[:,:,::-1])
         
         self.tar_code_info ={}
-        shape_code = self.res_code_info['shape_code'].clone().detach()
-        appea_code = self.res_code_info['appea_code'].clone().detach()
-        # shape_code[0,-self.eye_gaze_dim:] = -shape_code[0,-self.eye_gaze_dim:]
-        # appea_code[0,-self.eye_gaze_dim:] = -appea_code[0,-self.eye_gaze_dim:]
-        shape_code[0,-self.eye_gaze_dim:] = torch.ones(self.eye_gaze_dim) * self.scale_factor
-        #appea_code[0,-self.eye_gaze_dim:] = torch.ones(self.eye_gaze_dim)
-        self.tar_code_info['shape_code'] = shape_code.clone().detach()
-        self.tar_code_info['appea_code'] = appea_code.clone().detach()
-        self.tar_code_info['bg_code'] = None
-        shape_code[0,-self.eye_gaze_dim:] = -torch.ones(self.eye_gaze_dim)
-        #appea_code[0,-self.eye_gaze_dim:] = -torch.ones(self.eye_gaze_dim)
-        self.res_code_info['shape_code'] = shape_code.clone().detach()
-        self.res_code_info['appea_code'] = appea_code.clone().detach()
+        direction_list = [LOWER_RIGHT,UPPER_RIGHT,UPPER_LEFT,LOWER_LEFT,LOWER_RIGHT]
+        morph_res_seq = []
+        vec_results_seq = []
+        for i in range(len(direction_list)-1):
+            start = direction_list[i]
+            end = direction_list[i+1]
 
-        morph_res,vec_results = self.render_utils.render_gaze_redirect_res(self.net, self.res_code_info, self.tar_code_info, self.view_num,self.scale_factor,vis_vect=self.vis_vect)
-        #morph_res = self.render_utils.render_morphing_res(self.net, self.res_code_info, self.tar_code_info, self.view_num)
+            shape_code = self.res_code_info['shape_code'].clone().detach()
+            appea_code = self.res_code_info['appea_code'].clone().detach()
+            # shape_code[0,-self.eye_gaze_dim:] = -shape_code[0,-self.eye_gaze_dim:]
+            # appea_code[0,-self.eye_gaze_dim:] = -appea_code[0,-self.eye_gaze_dim:]
+            shape_code[0,-self.eye_gaze_dim:] = gaze_feat_tensor(self.eye_gaze_dim,self.scale_factor,end)
+            #appea_code[0,-self.eye_gaze_dim:] = torch.ones(self.eye_gaze_dim)
+            self.tar_code_info['shape_code'] = shape_code.clone().detach()
+            self.tar_code_info['appea_code'] = appea_code.clone().detach()
+            self.tar_code_info['bg_code'] = None
+            shape_code[0,-self.eye_gaze_dim:] = gaze_feat_tensor(self.eye_gaze_dim,self.scale_factor,start)
+            #appea_code[0,-self.eye_gaze_dim:] = -torch.ones(self.eye_gaze_dim)
+            self.res_code_info['shape_code'] = shape_code.clone().detach()
+            self.res_code_info['appea_code'] = appea_code.clone().detach()
+
+            morph_res,vec_results = self.render_utils.render_gaze_redirect_res(self.net, self.res_code_info, self.tar_code_info, self.view_num,self.scale_factor,vis_vect=self.vis_vect)
+            #morph_res = self.render_utils.render_morphing_res(self.net, self.res_code_info, self.tar_code_info, self.view_num)
+
+            morph_res_seq += morph_res
+            vec_results_seq += vec_results
+
+
         morph_save_path = "%s/FittingResMorphing_%s.gif" % (save_root, base_name)
-        imageio.mimsave(morph_save_path, morph_res, 'GIF', duration=self.duration)
+        imageio.mimsave(morph_save_path, morph_res_seq, 'GIF', duration=self.duration)
 
         image_vec_path = "%s/image_seq/" % (save_root)
         if not os.path.exists(image_vec_path):
             os.mkdir(image_vec_path)
-        for ind,img_vec in enumerate(vec_results):
+        for ind,img_vec in enumerate(vec_results_seq):
             cv2.imwrite(os.path.join(image_vec_path,f"image{ind}.png"),img_vec)
-
-
 
         for k, v in self.res_code_info.items():
             if isinstance(v, torch.Tensor):
