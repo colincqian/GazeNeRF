@@ -24,6 +24,7 @@ from Utils.Eval_utils import calc_eval_metrics
 from tqdm import tqdm
 import cv2
 from Utils.Log_utils import log
+from Utils.D6_rotation import gaze_tensor_to_d6
 
 
 class Trainer(object):
@@ -48,9 +49,13 @@ class Trainer(object):
         self.use_gt_camera = config.use_gt_camera
         self.include_eye_gaze = config.include_eye_gaze
         self.eye_gaze_dim = config.eye_gaze_dimension
+        self.use_6D_rotation = config.gaze_D6_rotation
         if self.eye_gaze_dim%2 == 1:
             #we need eye_gaze_dim to be even number
             raise Exception("eye_gaze_dim expected to be even number!")
+        if self.use_6D_rotation and self.eye_gaze_dim%6!=0:
+            raise Exception("eye_gaze_dim expected to be 6n when using 6D rotation representation!")
+
         self.eye_gaze_scale_factor = config.eye_gaze_scale_factor
         self.disentangle = config.eye_gaze_disentangle
 
@@ -150,8 +155,13 @@ class Trainer(object):
         base_illu = mm3d_param['code_info']['base_illu'].squeeze(1)
 
         if self.include_eye_gaze:
-            face_gaze = (face_gaze) * self.eye_gaze_scale_factor #normalized between 0 to 1    
-            face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//2)
+            self.face_gaze = face_gaze.clone()
+            if self.use_6D_rotation:
+                ##the transformation is non-linear cannot be directly scaled
+                face_gaze = (torch.from_numpy(gaze_tensor_to_d6(face_gaze))).to(self.device)
+            else:
+                face_gaze = (face_gaze) * self.eye_gaze_scale_factor #normalized between 0 to 1    
+            face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//face_gaze.size(0))
             shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
             appea_code = torch.cat([base_text, base_illu], dim=-1) ##test
         else:
@@ -222,11 +232,18 @@ class Trainer(object):
         self.writer.close()
     
     def eye_gaze_displacement(self,code_info,cam_info):
-        original_eye_gaze = code_info['shape_code'][0,-self.eye_gaze_dim:]
-        theta = original_eye_gaze[0];phi = original_eye_gaze[1]
-        theta_p = theta + torch.normal(0 , min(abs(1 * self.eye_gaze_scale_factor - theta) , abs(theta)))
-        phi_p = phi + torch.normal(0 , min(abs(1*self.eye_gaze_scale_factor - phi) , abs(phi)))
-        code_info['shape_code'][0,-self.eye_gaze_dim:] = torch.tensor([theta_p,phi_p]).repeat(1,self.eye_gaze_dim//2)
+        # original_eye_gaze = code_info['shape_code'][0,-self.eye_gaze_dim:]
+        theta = self.face_gaze[0]; phi = self.face_gaze[1]
+        theta_p = theta + torch.normal(0 , min(abs(1 - theta) , abs(-1 - theta)))
+        phi_p = phi + torch.normal(0 , min(abs(1 - phi) , abs(-1 - phi)))
+        face_gaze_new =  torch.tensor([theta_p,phi_p])
+        
+        if self.use_6D_rotation:
+            face_gaze_new = (torch.from_numpy(gaze_tensor_to_d6(face_gaze_new))).to(self.device)
+        else:
+            face_gaze_new = (face_gaze_new) * self.eye_gaze_scale_factor
+            
+        code_info['shape_code'][0,-self.eye_gaze_dim:] = face_gaze_new.repeat(1,self.eye_gaze_dim//face_gaze_new.size(0))
         
         pred_dict_p = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
 

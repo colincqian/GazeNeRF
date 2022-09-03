@@ -114,6 +114,9 @@ misc_arg.add_argument('--eye_gaze_scale_factor', type=int, default=1,
                       help='Decide to how much you want to scale normalized face gaze')
 misc_arg.add_argument('--eye_gaze_disentangle', type=str2bool, default=True,
                       help='Decide to whether to use disentangle module for eye gaze (high computational cost)')
+misc_arg.add_argument('--gaze_D6_rotation', type=str2bool, default=False,
+                    help="Whether to use 6D rotation representation instead of [-1,1] gaze")
+
 
 misc_arg.add_argument('--resume', type=str, default='',
                       help='whether to resume training, load saved ckpt')        
