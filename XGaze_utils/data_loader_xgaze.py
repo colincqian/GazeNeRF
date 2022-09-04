@@ -18,6 +18,7 @@ import csv
 import pickle as pkl
 
 from XGaze_utils.XGaze_camera_Loader import Camera_Loader
+from Utils.D6_rotation import gaze_to_d6
 
 
 trans_train = transforms.Compose([
@@ -179,7 +180,8 @@ class GazeDataset_normailzed_from_hdf(Dataset):
                  index_file=None, 
                  is_load_label=True,
                  device = 'cpu',
-                 filter_view=False):
+                 filter_view=False,
+                 gaze_disp = True):
         self.path = dataset_path
         self.hdfs = {}
         self.sub_folder = sub_folder
@@ -188,6 +190,7 @@ class GazeDataset_normailzed_from_hdf(Dataset):
         self._3dmm_data_dir = _3dmm_data_dir
         self.device = device
         self.filter_view = filter_view
+        self.gaze_disp = gaze_disp #whether to add gaze displacement 
         if opt is not None:
             self.opt = opt
         else:
@@ -301,6 +304,12 @@ class GazeDataset_normailzed_from_hdf(Dataset):
         else:
             gaze_tensor = torch.tensor([None,None])
 
+        gaze_d6 = gaze_to_d6(gaze_label)
+        gaze_d6_tensor = (torch.from_numpy(gaze_d6)).to(self.device)
+
+        if self.gaze_disp:
+            face_gaze_disp,face_gaze_d6_disp = self.eye_gaze_displacement(gaze_label)
+
         camera_index = self.hdf['cam_index'][img_index][0]
 
         camera_parameter = self.camera_loader[camera_index]  ##ground truth camera info
@@ -314,7 +323,10 @@ class GazeDataset_normailzed_from_hdf(Dataset):
                         '_3dmm': {'cam_info':self.cam_info,
                                   'code_info':self.code_info},
                         'img_mask' : mask_tensor,
-                        'eye_mask' : eye_mask_tensor
+                        'eye_mask' : eye_mask_tensor,
+                        'gaze_6d' : gaze_d6_tensor,
+                        'gaze_disp' : face_gaze_disp,
+                        'gaze_disp_d6' : face_gaze_d6_disp
                     }
         return data_info
 
@@ -362,6 +374,18 @@ class GazeDataset_normailzed_from_hdf(Dataset):
             "inmat" : temp_inmat,
             "inv_inmat" : temp_inv_inmat.float()
         }
+
+    def eye_gaze_displacement(self,face_gaze):
+        theta = face_gaze[0]; phi = face_gaze[1]
+        theta_p = theta + np.random.normal(0 , min(abs(1 - theta) , abs(-1 - theta)))
+        phi_p = phi + np.random.normal(0 , min(abs(1 - phi) , abs(-1 - phi)))
+        face_gaze_new =  np.array([theta_p,phi_p]).astype('float')
+        face_gaze_d6 = gaze_to_d6(face_gaze_new).astype('float')
+
+        face_gaze_disp = (torch.from_numpy(face_gaze_new)).to(self.device)
+        face_gaze_d6_disp = (torch.from_numpy(face_gaze_d6)).to(self.device)
+
+        return face_gaze_disp,face_gaze_d6_disp
 
     def debug_iter(self,idx):
         key, idx = self.idx_to_kv[idx]

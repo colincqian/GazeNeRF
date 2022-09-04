@@ -24,7 +24,7 @@ from Utils.Eval_utils import calc_eval_metrics
 from tqdm import tqdm
 import cv2
 from Utils.Log_utils import log
-from Utils.D6_rotation import gaze_tensor_to_d6
+from Utils.D6_rotation import gaze_to_d6
 
 
 class Trainer(object):
@@ -158,10 +158,11 @@ class Trainer(object):
             self.face_gaze = face_gaze.clone()
             if self.use_6D_rotation:
                 ##the transformation is non-linear cannot be directly scaled
-                face_gaze = (torch.from_numpy(gaze_tensor_to_d6(face_gaze))).to(self.device)
+                face_gaze = data_info['gaze_6d'].float()
             else:
                 face_gaze = (face_gaze) * self.eye_gaze_scale_factor #normalized between 0 to 1    
-            face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//face_gaze.size(0))
+
+            face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//face_gaze.size(1))
             shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
             appea_code = torch.cat([base_text, base_illu], dim=-1) ##test
         else:
@@ -231,23 +232,17 @@ class Trainer(object):
 
         self.writer.close()
     
-    def eye_gaze_displacement(self,code_info,cam_info):
-        # original_eye_gaze = code_info['shape_code'][0,-self.eye_gaze_dim:]
-        theta = self.face_gaze[0]; phi = self.face_gaze[1]
-        theta_p = theta + torch.normal(0 , min(abs(1 - theta) , abs(-1 - theta)))
-        phi_p = phi + torch.normal(0 , min(abs(1 - phi) , abs(-1 - phi)))
-        face_gaze_new =  torch.tensor([theta_p,phi_p])
-        
+    def eye_gaze_displacement(self,data_info,code_info,cam_info):
         if self.use_6D_rotation:
-            face_gaze_new = (torch.from_numpy(gaze_tensor_to_d6(face_gaze_new))).to(self.device)
+            face_gaze_new = data_info['gaze_disp_d6'].float()
         else:
-            face_gaze_new = (face_gaze_new) * self.eye_gaze_scale_factor
+            face_gaze_new = data_info['gaze_disp'].float() * self.eye_gaze_scale_factor
             
-        code_info['shape_code'][0,-self.eye_gaze_dim:] = face_gaze_new.repeat(1,self.eye_gaze_dim//face_gaze_new.size(0))
+        code_info['shape_code'][:,-self.eye_gaze_dim:] = face_gaze_new.repeat(1,self.eye_gaze_dim//face_gaze_new.size(1))
         
         pred_dict_p = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
 
-        return pred_dict_p,(theta_p,phi_p)
+        return pred_dict_p,face_gaze_new
 
 
     def train_one_epoch(self, epoch, data_loader, is_train=True):
@@ -260,7 +255,7 @@ class Trainer(object):
                 pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
                 
                 if self.disentangle:
-                    disp_pred_dict,disp_gaze = self.eye_gaze_displacement(code_info,cam_info)
+                    disp_pred_dict,disp_gaze = self.eye_gaze_displacement(data_info,code_info,cam_info)
                 else:
                     disp_pred_dict = None
 
@@ -279,8 +274,10 @@ class Trainer(object):
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-
-            loop_bar.set_description("Opt, Head_loss/Img_disp/Lm_disp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["lm_disp_loss"].item()) )  
+            if self.disentangle:
+                loop_bar.set_description("Opt, Head_loss/Img_disp/Lm_disp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["lm_disp_loss"].item()) )  
+            else:
+                loop_bar.set_description("Opt, Head_loss: %.6f " % (batch_loss_dict["head_loss"].item()) )  
 
 
                 
@@ -378,7 +375,7 @@ class Trainer(object):
             print("now =", now)
             self.logger = log(path=log_path,file=f'{now}_training_log_file.logs')
 
-            config_list=['batch_size','init_lr','epochs','ckpt_dirs','include_eye_gaze','eye_gaze_dimension','eye_gaze_scale_factor','comment']
+            config_list=['batch_size','init_lr','epochs','ckpt_dirs','include_eye_gaze','eye_gaze_dimension','gaze_D6_rotation','eye_gaze_scale_factor','comment']
             self.logger.info("----Training configuration----")
             for k,v in self.config.__dict__.items():
                 if k in config_list:
