@@ -192,18 +192,18 @@ def rpy_to_6d(roll,pitch,yaw):
 def gaze_to_d6(face_gaze):
     #face_np = face_tensor.cpu().detach().numpy()
     roll = 0
-    pitch = face_gaze[0]
-    yaw = face_gaze[1]
+    pitch = face_gaze[0] #* np.pi /2
+    yaw = face_gaze[1] #* np.pi /2
     return rpy_to_6d(roll,pitch,yaw).flatten()
 
 
 
 
 if __name__ == '__main__':
-    value = [[0,np.pi/8,np.pi/2],
-            [0,np.pi/6,-np.pi/2],
-            [0,-np.pi/3,np.pi/2],
-            [0,-np.pi/5,-np.pi/2]]
+    value = [[0,np.pi/6,np.pi/2],
+            [0,np.pi/3,np.pi/2],
+            [0,np.pi/2,np.pi/2],
+            [0,2*np.pi/3,np.pi/2]]
 
     for rpy in value:
         d6 = rpy_to_6d(*rpy)
