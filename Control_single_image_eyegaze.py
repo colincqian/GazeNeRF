@@ -18,6 +18,7 @@ import argparse
 from tool_funcs import put_text_alignmentcenter
 import h5py
 from Utils.D6_rotation import gaze_to_d6
+from scipy import stats
 
 #define eye gaze base
 UPPER_RIGHT = torch.tensor([0.25,-0.5])
@@ -59,7 +60,13 @@ class FittingImage(object):
         self.vis_vect = vis_vect
         self.use_6D_rotation = D6_rotation
         
-
+        self.error_ave_dict = {'ave_e_h0':[],
+                                'ave_e_v0':[],
+                                'ave_e_h1':[],
+                                'ave_e_v1':[],
+                                'ave_e_h2':[],
+                                'ave_e_v2':[],
+        }
         self.build_info()
         self.build_tool_funcs()
 
@@ -100,10 +107,11 @@ class FittingImage(object):
         img = self.hdf['face_patch'][img_index]
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         img = img.astype(np.float32)/255.0
-        
         gt_img_size = img.shape[0]
         if gt_img_size != self.pred_img_size:
             img = cv2.resize(img, dsize=img_size, fx=0, fy=0, interpolation=cv2.INTER_LINEAR)
+        
+        self.uncropped_gt_image = (img * 255).astype(np.uint8)
         
         mask_img =  self.hdf['mask'][img_index]
         if mask_img.shape[0] != self.pred_img_size:
@@ -429,7 +437,7 @@ class FittingImage(object):
     def render_face_gaze_and_ground_truth_image(self,hdf_file_path,image_index,save_root,vis_vect=True):
         self.load_data(hdf_file_path,image_index)
         self.perform_fitting()
-        rendered_results = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=self.gaze_tensor,scale_factor = 1,gaze_dim = self.eye_gaze_dim,vis_vect=vis_vect)
+        rendered_results,e_v2,e_h2 = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=self.gaze_tensor,scale_factor = 1,gaze_dim = self.eye_gaze_dim,vis_vect=vis_vect)
         
         inmat_np = torch.linalg.inv(self.res_cam_info['batch_inv_inmats']).detach().cpu().numpy()
         inmat_np = inmat_np.reshape((3,3))
@@ -439,18 +447,31 @@ class FittingImage(object):
         
         gt_img = (self.img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         gt_img = cv2.cvtColor(gt_img, cv2.COLOR_BGR2RGB)
-        gt_img = self.render_utils.render_gaze_vect(gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
+        gt_img,e_v1,e_h1 = self.render_utils.render_gaze_vect(gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
 
-        res_img = np.concatenate([gt_img, rendered_results], axis=1)
+        uncropped_gt_img = cv2.cvtColor(self.uncropped_gt_image, cv2.COLOR_BGR2RGB)
+        uncropped_gt_img,e_v0,e_h0 = self.render_utils.render_gaze_vect(uncropped_gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
+
+        self.error_ave_dict['ave_e_h0']+= [e_h0]
+        self.error_ave_dict['ave_e_v0']+= [e_v0]
+        self.error_ave_dict['ave_e_h1']+= [e_h1]
+        self.error_ave_dict['ave_e_v1']+= [e_v1]
+        self.error_ave_dict['ave_e_h2']+= [e_h2]
+        self.error_ave_dict['ave_e_v2']+= [e_v2]
+
+
+        res_img = np.concatenate([uncropped_gt_img,gt_img, rendered_results], axis=1)
 
         # cv2.imshow('current rendering', res_img)
         # cv2.waitKey(0) 
         # #closing all open windows 
         # cv2.destroyAllWindows()  
 
-        cv2.imwrite(os.path.join(save_root,f'gt_and_rendered_image{image_index}.png'),res_img)
-
-
+        #cv2.imwrite(os.path.join(save_root,f'gt_and_rendered_image{image_index}.png'),res_img)
+        
+        print('#######current average error##########')
+        for key,value in self.error_ave_dict.items():
+            print(" %s : %.5f" % (key , stats.trim_mean(value, 0)))
 
     def _display_current_rendered_image(self,pred_dict,img_tensor):
         coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]

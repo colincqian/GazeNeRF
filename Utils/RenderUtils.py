@@ -192,7 +192,7 @@ class RenderUtils(object):
         if vis_vect:    
             return self.render_gaze_vect(coarse_fg_rgb.copy(),cam_info,face_gaze)
 
-        return coarse_fg_rgb
+        return coarse_fg_rgb,0,0
 
     def render_gaze_vect(self,coarse_fg_rgb,cam_info,face_gaze):
         face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
@@ -211,7 +211,7 @@ class RenderUtils(object):
         cv2.putText(img=face_patch_gaze, text='vertical_e' + str(e_v), org=(0, 450), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(0, 0, 0),thickness=1)
         cv2.putText(img=face_patch_gaze, text='horizontal_e' + str(e_h), org=(0,475), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(0, 0, 0),thickness=1)
         
-        return face_patch_gaze
+        return face_patch_gaze,e_v,e_h
 
     def render_gaze_redirect_res(self, net, code_info_1, code_info_2, nums, scale_factor,gaze_dim,vis_vect=True, D6_rotation=False):
         ##code1 and code2 only have difference in last few columns (gaze tensor)
