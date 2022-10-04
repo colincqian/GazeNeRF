@@ -35,7 +35,7 @@ class BaseOptions(object):
 
 
 dataset_config={
-    'dataset_path': './XGaze_data/processed_data/',
+    'dataset_path': './XGaze_data/processed_data_10cam',
     'opt': BaseOptions(),
     'keys_to_use':['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008','subject0009','subject0010','subject0013'], 
     'sub_folder':'train',
@@ -114,6 +114,9 @@ misc_arg.add_argument('--eye_gaze_scale_factor', type=int, default=1,
                       help='Decide to how much you want to scale normalized face gaze')
 misc_arg.add_argument('--eye_gaze_disentangle', type=str2bool, default=True,
                       help='Decide to whether to use disentangle module for eye gaze (high computational cost)')
+misc_arg.add_argument('--gaze_D6_rotation', type=str2bool, default=False,
+                    help="Whether to use 6D rotation representation instead of [-1,1] gaze")
+
 
 misc_arg.add_argument('--resume', type=str, default='',
                       help='whether to resume training, load saved ckpt')        

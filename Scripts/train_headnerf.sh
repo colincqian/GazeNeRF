@@ -3,6 +3,9 @@ python train_headnerf.py --headnerf_options "TrainedModels/model_Reso32HR.pth" \
                          --gpu_id 3 \
                          --include_eye_gaze True \
                          --eye_gaze_dimension 64 \
-                         --eye_gaze_scale_factor 2 \
-                         --comment 'train with displacement loss (weight 3), scale factor 2, no normalization to eye gaze( from -2 to 2)' \
-                         --print_freq 50
+                         --eye_gaze_scale_factor 1 \
+                         --print_freq 50 \
+                         --gaze_D6_rotation False \
+                         --eye_gaze_disentangle True \
+                         --comment 'gaze_dim 64,disentanglement True, 10 cam views' 
+

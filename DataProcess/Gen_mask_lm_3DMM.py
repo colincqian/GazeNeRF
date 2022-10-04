@@ -13,7 +13,10 @@ import torch
 from Gen_HeadMask import GenHeadMask
 from Gen_Landmark import  Gen2DLandmarks
 import sys
-sys.path.append("/home/chqian/Ubuntu_data/Project/headnerf/Fitting3DMM")
+sys.path.append("/home/colinqian/Project/HeadNeRF/headnerf/Fitting3DMM")
+
+#sys.path.append("/local/home/chqian/HeadNerf/Fitting3DMM")
+
 from FittingNL3DMM import FittingNL3DMM_from_h5py
 
 
@@ -247,6 +250,7 @@ if __name__ == "__main__":
     parser.add_argument("--se", type=int, required=True,default=1)
     args = parser.parse_args()
 
+    torch.cuda.set_device(3)
     test = Data_Processor(args.img_dir,args.save_dir,250,125,hdf_file=True)
     for sub_id in range(args.sb,args.se):
         test.process_data_from_hdf_file(sub_id)

@@ -24,6 +24,7 @@ from Utils.Eval_utils import calc_eval_metrics
 from tqdm import tqdm
 import cv2
 from Utils.Log_utils import log
+from Utils.D6_rotation import gaze_to_d6
 
 
 class Trainer(object):
@@ -48,9 +49,13 @@ class Trainer(object):
         self.use_gt_camera = config.use_gt_camera
         self.include_eye_gaze = config.include_eye_gaze
         self.eye_gaze_dim = config.eye_gaze_dimension
+        self.use_6D_rotation = config.gaze_D6_rotation
         if self.eye_gaze_dim%2 == 1:
             #we need eye_gaze_dim to be even number
             raise Exception("eye_gaze_dim expected to be even number!")
+        if self.use_6D_rotation and self.eye_gaze_dim%6!=0:
+            raise Exception("eye_gaze_dim expected to be 6n when using 6D rotation representation!")
+
         self.eye_gaze_scale_factor = config.eye_gaze_scale_factor
         self.disentangle = config.eye_gaze_disentangle
 
@@ -150,8 +155,14 @@ class Trainer(object):
         base_illu = mm3d_param['code_info']['base_illu'].squeeze(1)
 
         if self.include_eye_gaze:
-            face_gaze = (face_gaze) * self.eye_gaze_scale_factor #normalized between 0 to 1    
-            face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//2)
+            self.face_gaze = face_gaze.clone()
+            if self.use_6D_rotation:
+                ##the transformation is non-linear cannot be directly scaled
+                face_gaze = data_info['gaze_6d'].float() * self.eye_gaze_scale_factor
+            else:
+                face_gaze = (face_gaze) * self.eye_gaze_scale_factor
+
+            face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//face_gaze.size(1))
             shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
             appea_code = torch.cat([base_text, base_illu], dim=-1) ##test
         else:
@@ -221,16 +232,17 @@ class Trainer(object):
 
         self.writer.close()
     
-    def eye_gaze_displacement(self,code_info,cam_info):
-        original_eye_gaze = code_info['shape_code'][0,-self.eye_gaze_dim:]
-        theta = original_eye_gaze[0];phi = original_eye_gaze[1]
-        theta_p = theta + torch.normal(0 , min(abs(1 * self.eye_gaze_scale_factor - theta) , abs(theta)))
-        phi_p = phi + torch.normal(0 , min(abs(1*self.eye_gaze_scale_factor - phi) , abs(phi)))
-        code_info['shape_code'][0,-self.eye_gaze_dim:] = torch.tensor([theta_p,phi_p]).repeat(1,self.eye_gaze_dim//2)
+    def eye_gaze_displacement(self,data_info,code_info,cam_info):
+        if self.use_6D_rotation:
+            face_gaze_new = data_info['gaze_disp_d6'].float() * self.eye_gaze_scale_factor
+        else:
+            face_gaze_new = data_info['gaze_disp'].float() * self.eye_gaze_scale_factor
+            
+        code_info['shape_code'][:,-self.eye_gaze_dim:] = face_gaze_new.repeat(1,self.eye_gaze_dim//face_gaze_new.size(1))
         
         pred_dict_p = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
 
-        return pred_dict_p,(theta_p,phi_p)
+        return pred_dict_p,face_gaze_new
 
 
     def train_one_epoch(self, epoch, data_loader, is_train=True):
@@ -243,7 +255,7 @@ class Trainer(object):
                 pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
                 
                 if self.disentangle:
-                    disp_pred_dict,disp_gaze = self.eye_gaze_displacement(code_info,cam_info)
+                    disp_pred_dict,disp_gaze = self.eye_gaze_displacement(data_info,code_info,cam_info)
                 else:
                     disp_pred_dict = None
 
@@ -262,8 +274,10 @@ class Trainer(object):
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-
-            loop_bar.set_description("Opt, Head_loss/Img_disp/Lm_disp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["lm_disp_loss"].item()) )  
+            if self.disentangle:
+                loop_bar.set_description("Opt, Head_loss/Img_disp/Lm_disp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["lm_disp_loss"].item()) )  
+            else:
+                loop_bar.set_description("Opt, Head_loss: %.6f " % (batch_loss_dict["head_loss"].item()) )  
 
 
                 
@@ -361,7 +375,7 @@ class Trainer(object):
             print("now =", now)
             self.logger = log(path=log_path,file=f'{now}_training_log_file.logs')
 
-            config_list=['batch_size','init_lr','epochs','ckpt_dirs','include_eye_gaze','eye_gaze_dimension','eye_gaze_scale_factor','comment']
+            config_list=['batch_size','init_lr','epochs','ckpt_dirs','include_eye_gaze','eye_gaze_dimension','gaze_D6_rotation','eye_gaze_scale_factor','comment']
             self.logger.info("----Training configuration----")
             for k,v in self.config.__dict__.items():
                 if k in config_list:

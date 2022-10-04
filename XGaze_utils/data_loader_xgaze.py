@@ -1,3 +1,4 @@
+from asyncio import selector_events
 from logging import raiseExceptions
 from signal import raise_signal
 import numpy as np
@@ -17,7 +18,13 @@ import cv2
 import csv
 import pickle as pkl
 
+import sys
+sys.path.insert(1,'..')
 from XGaze_utils.XGaze_camera_Loader import Camera_Loader
+from Utils.D6_rotation import gaze_to_d6
+
+from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 
 trans_train = transforms.Compose([
@@ -179,7 +186,8 @@ class GazeDataset_normailzed_from_hdf(Dataset):
                  index_file=None, 
                  is_load_label=True,
                  device = 'cpu',
-                 filter_view=False):
+                 filter_view=False,
+                 gaze_disp = True):
         self.path = dataset_path
         self.hdfs = {}
         self.sub_folder = sub_folder
@@ -188,6 +196,7 @@ class GazeDataset_normailzed_from_hdf(Dataset):
         self._3dmm_data_dir = _3dmm_data_dir
         self.device = device
         self.filter_view = filter_view
+        self.gaze_disp = gaze_disp #whether to add gaze displacement 
         if opt is not None:
             self.opt = opt
         else:
@@ -239,6 +248,7 @@ class GazeDataset_normailzed_from_hdf(Dataset):
 
         self.hdf = None
         self.transform = transform
+
 
         
 
@@ -301,6 +311,12 @@ class GazeDataset_normailzed_from_hdf(Dataset):
         else:
             gaze_tensor = torch.tensor([None,None])
 
+        gaze_d6 = gaze_to_d6(gaze_label)
+        gaze_d6_tensor = (torch.from_numpy(gaze_d6)).to(self.device)
+
+        if self.gaze_disp:
+            face_gaze_disp,face_gaze_d6_disp = self.eye_gaze_displacement(gaze_label)
+
         camera_index = self.hdf['cam_index'][img_index][0]
 
         camera_parameter = self.camera_loader[camera_index]  ##ground truth camera info
@@ -314,7 +330,10 @@ class GazeDataset_normailzed_from_hdf(Dataset):
                         '_3dmm': {'cam_info':self.cam_info,
                                   'code_info':self.code_info},
                         'img_mask' : mask_tensor,
-                        'eye_mask' : eye_mask_tensor
+                        'eye_mask' : eye_mask_tensor,
+                        'gaze_6d' : gaze_d6_tensor,
+                        'gaze_disp' : face_gaze_disp,
+                        'gaze_disp_d6' : face_gaze_d6_disp
                     }
         return data_info
 
@@ -362,6 +381,18 @@ class GazeDataset_normailzed_from_hdf(Dataset):
             "inmat" : temp_inmat,
             "inv_inmat" : temp_inv_inmat.float()
         }
+
+    def eye_gaze_displacement(self,face_gaze):
+        theta = face_gaze[0]; phi = face_gaze[1]
+        theta_p = theta + np.random.normal(0 , min(abs(1 - theta) , abs(-1 - theta)))
+        phi_p = phi + np.random.normal(0 , min(abs(1 - phi) , abs(-1 - phi)))
+        face_gaze_new =  np.array([theta_p,phi_p]).astype('float')
+        face_gaze_d6 = gaze_to_d6(face_gaze_new).astype('float')
+
+        face_gaze_disp = (torch.from_numpy(face_gaze_new)).to(self.device)
+        face_gaze_d6_disp = (torch.from_numpy(face_gaze_d6)).to(self.device)
+
+        return face_gaze_disp,face_gaze_d6_disp
 
     def debug_iter(self,idx):
         key, idx = self.idx_to_kv[idx]
@@ -669,147 +700,18 @@ class GazeDataset_normailzed(Dataset):
         cv2.waitKey(0) 
         cv2.destroyAllWindows() 
 
+def plot_eye_gaze_distribution(dataloader,color='b'):
 
-################data loader for raw data#############################
-class XGaze_raw(Dataset):
-    def __init__(self,dataset_path: str,frame_selected:list,subject_selected:list,annotation_path:str,device,opt:BaseOptions,is_shuffle=True):
-        self.path = dataset_path
-        self.annot_path = annotation_path
-        self.frame_selected = frame_selected
-        self.subject_selected = subject_selected
-        self.device = device
-        self.opt = opt
-
-        self.data_dic = {} #{imgname, path, img, gaze_label,head_pose_label,camera parameter annot, camera parameter 3dmm, code info, image mask}
-        self.data_info = {} #subject_id_frame_id_camera_id
-        self.idx_to_kv = [] #map idx to (subject_id,frame_id,camera_id)
-
-
-        img_size = (self.opt.pred_img_size, self.opt.pred_img_size)
-        self.pred_img_size = self.opt.pred_img_size
-        self.featmap_size = self.opt.featmap_size
-        self.featmap_nc = self.opt.featmap_nc
-
-        for subject_id in self.subject_selected:
-            gen_annotation = self.load_annot(os.path.join(self.annot_path,'subject%04d.csv'%(subject_id,)))
-            for frame_id in self.frame_selected:
-                for cam_id in range(18):
-                    annotation = next(gen_annotation)
-                    img_name = 'frame%04d_cam%02d' %(frame_id,cam_id)
-                    self.img_path = os.path.join(dataset_path,img_name+'.png')
-                    
-                    if not self.check_file_existance():
-                        print(f'cannot find img file or 3dmm model parameter of {img_name}')
-                        continue
-
-                    img = cv2.imread(self.img_path)
-                    #img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                    img = img.astype(np.float32)/255.0
-                    self.gt_img_size = img.shape[0]
-                    if self.gt_img_size != self.pred_img_size:
-                        img = cv2.resize(img, dsize=img_size, fx=0, fy=0, interpolation=cv2.INTER_LINEAR)
-
-                    mask_img = cv2.imread(self.img_path.replace(".png","_mask.png"), cv2.IMREAD_UNCHANGED).astype(np.uint8)
-                    if mask_img.shape[0] != self.pred_img_size:
-                        mask_img = cv2.resize(mask_img, dsize=img_size, fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
-
-                    img[mask_img < 0.5] = 1.0
-                    img_tensor = (torch.from_numpy(img).permute(2, 0, 1)).unsqueeze(0).to(self.device)
-                    mask_tensor = torch.from_numpy(mask_img[None, :, :]).unsqueeze(0).to(self.device)
-
-                    
-                    
-                    self.load_3dmm_params(self.img_path.replace(".png","_nl3dmm.pkl"))
-
-                    self.data_info[(subject_id,frame_id,cam_id)] = {
-                        'imgname' : img_name,
-                        'img_path': self.img_path,
-                        'img' : img_tensor,
-                        'gaze': torch.tensor(annotation[:2],device=self.device),  ##only available in training set
-                        'head_pose': torch.tensor(annotation[5:11],device=self.device),
-                        'camera_parameter': torch.zeros(1),
-                        '_3dmm': {'cam_info':self.cam_info,
-                                  'code_info':self.code_info},
-                        'img_mask' : mask_tensor
-                    }
-                    self.idx_to_kv.append((subject_id,frame_id,cam_id))
-        
-                
-        if is_shuffle:
-            random.shuffle(self.idx_to_kv)  # random the order to stable the training
-
-
-    def __len__(self):
-        return len(self.data_info)
-
-    def __getitem__(self, idx):
-        key = self.idx_to_kv[idx]
-        #assert type(self.data_info[key]) == 'dict'
-        return self.data_info[key]
-
-    def check_file_existance(self):
-        return os.path.exists(self.img_path) & \
-        os.path.exists(self.img_path.replace(".png","_mask.png")) & \
-        os.path.exists(self.img_path.replace(".png","_nl3dmm.pkl"))
-
-        
-
-
-    def load_3dmm_params(self,para_3dmm_path):
-        # load init codes from the results generated by solving 3DMM rendering opt.
-        with open(para_3dmm_path, "rb") as f: nl3dmm_para_dict = pkl.load(f)
-        base_code = nl3dmm_para_dict["code"].detach().unsqueeze(0).to(self.device)
-        
-        base_iden = base_code[:, :self.opt.iden_code_dims]
-        base_expr = base_code[:, self.opt.iden_code_dims:self.opt.iden_code_dims + self.opt.expr_code_dims]
-        base_text = base_code[:, self.opt.iden_code_dims + self.opt.expr_code_dims:self.opt.iden_code_dims 
-                                                            + self.opt.expr_code_dims + self.opt.text_code_dims]
-        base_illu = base_code[:, self.opt.iden_code_dims + self.opt.expr_code_dims + self.opt.text_code_dims:]
-        
-        self.base_c2w_Rmat = nl3dmm_para_dict["c2w_Rmat"].detach().unsqueeze(0)
-        self.base_c2w_Tvec = nl3dmm_para_dict["c2w_Tvec"].detach().unsqueeze(0).unsqueeze(-1)
-        self.base_w2c_Rmat = nl3dmm_para_dict["w2c_Rmat"].detach().unsqueeze(0)
-        self.base_w2c_Tvec = nl3dmm_para_dict["w2c_Tvec"].detach().unsqueeze(0).unsqueeze(-1)
-
-        temp_inmat = nl3dmm_para_dict["inmat"].detach().unsqueeze(0)
-        temp_inmat[:, :2, :] *= (self.featmap_size / self.gt_img_size)
-        
-        temp_inv_inmat = torch.zeros_like(temp_inmat)
-        temp_inv_inmat[:, 0, 0] = 1.0 / temp_inmat[:, 0, 0]
-        temp_inv_inmat[:, 1, 1] = 1.0 / temp_inmat[:, 1, 1]
-        temp_inv_inmat[:, 0, 2] = -(temp_inmat[:, 0, 2] / temp_inmat[:, 0, 0])
-        temp_inv_inmat[:, 1, 2] = -(temp_inmat[:, 1, 2] / temp_inmat[:, 1, 1])
-        temp_inv_inmat[:, 2, 2] = 1.0
-        
-        #self.temp_inmat = temp_inmat
-        self.temp_inv_inmat = temp_inv_inmat
-
-        self.cam_info = {
-            "batch_Rmats": self.base_c2w_Rmat.to(self.device),
-            "batch_Tvecs": self.base_c2w_Tvec.to(self.device),
-            "batch_inv_inmats": self.temp_inv_inmat.to(self.device)
-        }
-
-        self.code_info = {
-            "base_iden" : base_iden,
-            "base_expr" : base_expr,
-            "base_text" : base_text,
-            "base_illu" : base_illu,
-            "inmat" : temp_inmat,
-            "inv_inmat" : temp_inv_inmat
-        }
-
-
-
-    def load_annot(self,file_path):
-        with open(file_path) as f:
-            csv_f = csv.reader(f,delimiter=',')
-            for row in csv_f:
-                yield np.array(row[2:],dtype=np.float) 
-
-
-
+    plt.xlim(-1, 1)
+    plt.ylim(-1, 1)
+    loop_bar = tqdm(enumerate(dataloader), leave=False, total=len(dataloader))
+    for idx,data_info in loop_bar:
+        gaze = data_info['gaze']
+        gaze_np = gaze.view(-1).cpu().detach().numpy()
+        plt.scatter(gaze_np[0],gaze_np[1],s=5,c=color)
+    
 if __name__=='__main__':
+
     # torch.multiprocessing.set_start_method('spawn')# good solution !!!!
     # Dataloader = get_data_loader('/home/colinqian/Project/HeadNeRF/headnerf/XGaze_utils/playground',
     #                 '/home/colinqian/Project/HeadNeRF/headnerf/XGaze_utils',
@@ -821,28 +723,44 @@ if __name__=='__main__':
 
 
     #################test normalized data#####################
-    opt = BaseOptions()
-    dataset_config={
-        'dataset_path': './XGaze_Local/xgaze/',
-        'opt': BaseOptions(),
-        'keys_to_use':['subject0000.h5'], 
-        'sub_folder':'train',
-        'camera_dir':'./XGaze_Local/xgaze/camera_parameters',
-        '_3dmm_data_dir':'./XGaze_Local/normalized_250_data',
-        'transform':None, 
-        'is_shuffle':False,
-        'index_file':None, 
-        'is_load_label':True,
-        'device': 'cpu',
-        'filter_view': True
 
-    }
-    gaze_dataset = GazeDataset_normailzed(**dataset_config)
-    data_loader = DataLoader(gaze_dataset, batch_size=1, num_workers=4)
-    for iter,batch in enumerate(data_loader):
-        import ipdb;
-        ipdb.set_trace()
-        pass
+    from distinctipy import distinctipy
+    
+    opt = BaseOptions()
+    selected_subjects = ['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008','subject0009','subject0010','subject0013']
+    colors = distinctipy.get_colors(len(selected_subjects))
+    import ipdb
+    ipdb.set_trace()
+    for idx,subject in enumerate(selected_subjects):
+        dataset_config={
+            'dataset_path': './XGaze_data/processed_data/',
+            'opt': BaseOptions(),
+            'keys_to_use':[subject], 
+            'sub_folder':'train',
+            'camera_dir':'./XGaze_data/camera_parameters',
+            '_3dmm_data_dir':'./XGaze_data/normalized_250_data',
+            'transform':None, 
+            'is_shuffle':True,
+            'index_file':None, 
+            'is_load_label':True,
+            'device': 'cpu',
+            'filter_view': True
+        }
+        
+        data_loader_train,data_loader_eval = get_data_loader(
+                    mode='train',
+                    batch_size=1,
+                    num_workers=4,
+                    dataset_config=dataset_config
+                    )
+        plot_eye_gaze_distribution(data_loader_train,color=np.array([colors[idx]]))
+    plt.show()
+    # gaze_dataset = GazeDataset_normailzed(**dataset_config)
+    # data_loader = DataLoader(gaze_dataset, batch_size=1, num_workers=4)
+    # for iter,batch in enumerate(data_loader):
+    #     import ipdb;
+    #     ipdb.set_trace()
+    #     pass
 
 
 
