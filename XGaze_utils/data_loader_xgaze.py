@@ -180,23 +180,23 @@ class GazeDataset_normailzed_from_hdf(Dataset):
                  keys_to_use: List[str] = None, 
                  sub_folder='',
                  camera_dir='',
-                 _3dmm_data_dir='',
                  transform=None, 
                  is_shuffle=True,
                  index_file=None, 
                  is_load_label=True,
                  device = 'cpu',
                  filter_view=False,
-                 gaze_disp = True):
+                 gaze_disp = True,
+                 use_template = False):
         self.path = dataset_path
         self.hdfs = {}
         self.sub_folder = sub_folder
         self.is_load_label = is_load_label
         self.camera_loader = Camera_Loader(camera_dir)
-        self._3dmm_data_dir = _3dmm_data_dir
         self.device = device
         self.filter_view = filter_view
         self.gaze_disp = gaze_disp #whether to add gaze displacement 
+        self.use_template = use_template #whether to use template face with (0,0) gaze 
         if opt is not None:
             self.opt = opt
         else:
@@ -206,8 +206,12 @@ class GazeDataset_normailzed_from_hdf(Dataset):
         self.pred_img_size = self.opt.pred_img_size
         self.featmap_size = self.opt.featmap_size
         self.featmap_nc = self.opt.featmap_nc
-        
+        self.transform = transform
 
+        if self.use_template:
+            ##maps (subject_idx,cam_idx) to corresponding template image in hdf file
+            print('Use template image patch')
+            self.template_image_index = {}
         # assert len(set(keys_to_use) - set(all_keys)) == 0
         # Select keys
         # TODO: select only people with sufficient entries?
@@ -231,6 +235,8 @@ class GazeDataset_normailzed_from_hdf(Dataset):
             self.idx_to_kv = []
             for num_i in range(0, len(self.selected_keys)):
                 hdfs_file = self.hdfs[num_i]
+                if self.use_template:
+                    self.get_template_face_patch(hdfs_file,num_i)
                 n = hdfs_file["face_patch"].shape[0]
                 self.idx_to_kv += [(num_i, i) for i in range(n)
                                     if hdfs_file['valid_mask'][i] ] #valid frame in subject num_i
@@ -247,7 +253,7 @@ class GazeDataset_normailzed_from_hdf(Dataset):
             random.shuffle(self.idx_to_kv)  # random the order to stable the training
 
         self.hdf = None
-        self.transform = transform
+        
 
 
         
@@ -268,8 +274,6 @@ class GazeDataset_normailzed_from_hdf(Dataset):
         self.hdf = h5py.File(file_path, 'r', swmr=True)
         assert self.hdf.swmr_mode
 
-        #img_name = str(idx+1).zfill(6)+'.png'
-        #img_path = os.path.join(self._3dmm_data_dir,img_name)
         img_index = idx
 
         # Get face image
@@ -314,8 +318,7 @@ class GazeDataset_normailzed_from_hdf(Dataset):
         gaze_d6 = gaze_to_d6(gaze_label)
         gaze_d6_tensor = (torch.from_numpy(gaze_d6)).to(self.device)
 
-        if self.gaze_disp:
-            face_gaze_disp,face_gaze_d6_disp = self.eye_gaze_displacement(gaze_label)
+
 
         camera_index = self.hdf['cam_index'][img_index][0]
 
@@ -332,10 +335,49 @@ class GazeDataset_normailzed_from_hdf(Dataset):
                         'img_mask' : mask_tensor,
                         'eye_mask' : eye_mask_tensor,
                         'gaze_6d' : gaze_d6_tensor,
-                        'gaze_disp' : face_gaze_disp,
-                        'gaze_disp_d6' : face_gaze_d6_disp
                     }
+
+        if self.gaze_disp:
+            face_gaze_disp,face_gaze_d6_disp = self.eye_gaze_displacement(gaze_label)
+        
+            data_info.update(
+                        {
+                            'gaze_disp' : face_gaze_disp,
+                            'gaze_disp_d6' : face_gaze_d6_disp
+                        }
+            )
+
+            if self.use_template:
+                data_info['template_img'] = self.template_image_index[(key,camera_index)] #gaze in screen space
+                
+
         return data_info
+
+    def get_template_face_patch(self,hdfs_file,subject_idx):
+        '''
+        for each subject, we need to find the template for each camera view
+        '''
+        camera_indexs = np.unique(hdfs_file['cam_index'])
+        for cam_index in camera_indexs:
+            mask = np.where(np.reshape(hdfs_file['cam_index'],(-1)) == cam_index)[0]
+            target_index = mask[np.argmin(abs(hdfs_file['face_gaze'][mask,0]) + abs(hdfs_file['face_gaze'][mask,1]))]
+            #assert np.max(hdfs_file['face_gaze'][target_index,:]) < 0.1 ,f"face gaze {hdfs_file['face_gaze'][target_index,:]} is too large" #make sure the gaze is close enough to zero
+            print(f"face gaze {hdfs_file['face_gaze'][target_index,:]}")
+            #self.template_image_index[(subject_idx,cam_index)] = target_index
+            template_image = hdfs_file['face_patch'][target_index]
+
+            if self.transform is not None:
+                template_image = self.transform(template_image)
+            template_image = template_image.astype(np.float32)/255.0
+
+            gt_img_size = template_image.shape[0]
+            if gt_img_size != self.pred_img_size:
+                template_image = cv2.resize(template_image, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_LINEAR)
+            
+            img_tensor = (torch.from_numpy(template_image).permute(2, 0, 1)).unsqueeze(0).to(self.device)#not sure RGB or BRG
+
+            self.template_image_index[(subject_idx,cam_index)] = img_tensor
+
 
     def load_3dmm_params(self,index):
         # load init codes from the results generated by solving 3DMM rendering opt.
@@ -383,9 +425,15 @@ class GazeDataset_normailzed_from_hdf(Dataset):
         }
 
     def eye_gaze_displacement(self,face_gaze):
-        theta = face_gaze[0]; phi = face_gaze[1]
-        theta_p = theta + np.random.normal(0 , min(abs(1 - theta) , abs(-1 - theta)))
-        phi_p = phi + np.random.normal(0 , min(abs(1 - phi) , abs(-1 - phi)))
+        '''
+        if use template is True directly use (0,0) template gaze
+        '''
+        if self.use_template:
+            theta_p = 0 ;phi_p = 0
+        else:
+            theta = face_gaze[0]; phi = face_gaze[1]
+            theta_p = theta + np.random.normal(0 , min(abs(1 - theta) , abs(-1 - theta)))
+            phi_p = phi + np.random.normal(0 , min(abs(1 - phi) , abs(-1 - phi)))
         face_gaze_new =  np.array([theta_p,phi_p]).astype('float')
         face_gaze_d6 = gaze_to_d6(face_gaze_new).astype('float')
 
@@ -527,7 +575,7 @@ class GazeDataset_normailzed(Dataset):
         self.transform = transform
 
         #self.debug_iter(0)
-
+    
     def __len__(self):
         return len(self.idx_to_kv)
 
@@ -729,22 +777,21 @@ if __name__=='__main__':
     opt = BaseOptions()
     selected_subjects = ['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008','subject0009','subject0010','subject0013']
     colors = distinctipy.get_colors(len(selected_subjects))
-    import ipdb
-    ipdb.set_trace()
+
     for idx,subject in enumerate(selected_subjects):
         dataset_config={
-            'dataset_path': './XGaze_data/processed_data/',
+            'dataset_path': './XGaze_data/processed_data_10cam/',
             'opt': BaseOptions(),
             'keys_to_use':[subject], 
             'sub_folder':'train',
             'camera_dir':'./XGaze_data/camera_parameters',
-            '_3dmm_data_dir':'./XGaze_data/normalized_250_data',
             'transform':None, 
             'is_shuffle':True,
             'index_file':None, 
             'is_load_label':True,
             'device': 'cpu',
-            'filter_view': True
+            'filter_view': False,
+            'use_template':True
         }
         
         data_loader_train,data_loader_eval = get_data_loader(

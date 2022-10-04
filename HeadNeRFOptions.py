@@ -40,13 +40,12 @@ dataset_config={
     'keys_to_use':['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008','subject0009','subject0010','subject0013'], 
     'sub_folder':'train',
     'camera_dir':'./XGaze_data/camera_parameters',
-    '_3dmm_data_dir':'./XGaze_data/normalized_250_data',
     'transform':None, 
     'is_shuffle':True,
     'index_file':None, 
     'is_load_label':True,
     'device': 'cpu',
-    'filter_view': True
+    'filter_view': False
 
 }
 

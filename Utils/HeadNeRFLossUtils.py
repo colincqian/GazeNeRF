@@ -173,14 +173,15 @@ class HeadNeRFLossUtils(object):
 
         lm_disp_loss = torch.tensor(0).to(image_disp_loss.device).float()
         count=0
-        for batch_id in range(res_img.size(0)):
-            try:
-                lm_res = self.fa_func.get_landmarks(res_img[batch_id].permute(1,2,0))[0].float()
-                lm_disp = self.fa_func.get_landmarks(disp_img[batch_id].permute(1,2,0))[0].float()
-                lm_disp_loss += F.l1_loss(lm_res[:36],lm_disp[:36]) + F.l1_loss(lm_res[48:],lm_disp[48:])
-                count+=1
-            except:
-                pass
+        ##comment out lm loss
+        # for batch_id in range(res_img.size(0)):
+        #     try:
+        #         lm_res = self.fa_func.get_landmarks(res_img[batch_id].permute(1,2,0))[0].float()
+        #         lm_disp = self.fa_func.get_landmarks(disp_img[batch_id].permute(1,2,0))[0].float()
+        #         lm_disp_loss += F.l1_loss(lm_res[:36],lm_disp[:36]) + F.l1_loss(lm_res[48:],lm_disp[48:])
+        #         count+=1
+        #     except:
+        #         pass
 
         lm_disp_loss/= count + 1e-3
 
@@ -231,6 +232,13 @@ class HeadNeRFLossUtils(object):
             loss_dict.update(self.calc_disp_loss(pred_dict["coarse_dict"],disp_pred_dict["coarse_dict"],non_eye_mask_tensor=noneye_mask))
             total_loss += 3 * loss_dict["image_disp_loss"] + \
                           1 * loss_dict["lm_disp_loss"]
+            if 'template_img_gt' in disp_pred_dict:
+                #use template img
+                pred_dic= {  "merge_img" : disp_pred_dict['template_img_gt']  }
+                template_eye_loss = self.calc_disp_loss(pred_dic,disp_pred_dict["coarse_dict"],eye_mask)
+                loss_dict['template_eye_loss'] = template_eye_loss
+                total_loss += 10 * loss_dict['template_eye_loss'] 
+
 
         loss_dict["total_loss"] = total_loss
         return loss_dict

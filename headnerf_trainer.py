@@ -242,6 +242,9 @@ class Trainer(object):
         
         pred_dict_p = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
 
+        if 'template_img' in data_info:
+            pred_dict_p['template_img_gt'] = data_info['template_img'].clone()
+
         return pred_dict_p,face_gaze_new
 
 
@@ -274,8 +277,11 @@ class Trainer(object):
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-            if self.disentangle:
-                loop_bar.set_description("Opt, Head_loss/Img_disp/Lm_disp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["lm_disp_loss"].item()) )  
+            if self.disentangle:  
+                if "template_eye_loss" in batch_loss_dict:
+                    loop_bar.set_description("Opt, Head_loss/Img_disp/Img_temp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["template_eye_loss"].item()) )  
+                else:
+                    loop_bar.set_description("Opt, Head_loss/Img_disp/Lm_disp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["lm_disp_loss"].item()) )  
             else:
                 loop_bar.set_description("Opt, Head_loss: %.6f " % (batch_loss_dict["head_loss"].item()) )  
 
