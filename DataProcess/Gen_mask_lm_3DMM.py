@@ -13,7 +13,7 @@ import torch
 from Gen_HeadMask import GenHeadMask
 from Gen_Landmark import  Gen2DLandmarks
 import sys
-sys.path.append("/home/chqian/Ubuntu_data/Project/headnerf/Fitting3DMM")
+sys.path.append("/home/colinqian/Project/HeadNeRF/headnerf/Fitting3DMM")
 from FittingNL3DMM import FittingNL3DMM_from_h5py
 
 

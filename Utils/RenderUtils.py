@@ -160,12 +160,13 @@ class RenderUtils(object):
         return vertical_error,horizontal_error
     
 
-    def render_face_with_gaze(self,net,code_info,face_gaze,scale_factor,gaze_dim,vis_vect=True):
+    def render_face_with_gaze(self,net,code_info,face_gaze,scale_factor,gaze_dim,vis_vect=True,cam_info = None):
         batch_xy = self.ray_xy
         batch_uv = self.ray_uv
         shape_code = code_info["shape_code"]
         appea_code = code_info["appea_code"]
-
+        if cam_info is None:
+            cam_info = self.base_cam_info
         face_gaze = face_gaze.view(-1)
         face_gaze_feat = face_gaze.repeat(1,gaze_dim//face_gaze.size(0)) * scale_factor
 
@@ -178,9 +179,9 @@ class RenderUtils(object):
         }
 
         with torch.set_grad_enabled(False):
-            pred_dict = net("test",batch_xy, batch_uv, **code_info,**self.base_cam_info)
+            pred_dict = net("test",batch_xy, batch_uv, **code_info,**cam_info)
 
-        inmat_np = torch.linalg.inv(self.base_cam_info['batch_inv_inmats']).detach().cpu().numpy()
+        inmat_np = torch.linalg.inv(cam_info['batch_inv_inmats']).detach().cpu().numpy()
         inmat_np = inmat_np.reshape((3,3))
         distortion_np = np.zeros([1,5])
         inmat_np[0,0] *=10; inmat_np[1,1] *=10; inmat_np[0,2] *=10; inmat_np[1,2] *=10
@@ -195,7 +196,11 @@ class RenderUtils(object):
         return coarse_fg_rgb,0,0
 
     def render_gaze_vect(self,coarse_fg_rgb,cam_info,face_gaze):
-        face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
+        try:
+            face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
+        except:
+            print('no face detected')
+            return coarse_fg_rgb, -1, -1
         cv2.putText(img=face_patch_gaze, text=str(pred_gaze_np), org=(0, 50), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(255, 0, 0),thickness=1)
 
         input_gaze_np = face_gaze.detach().cpu().numpy()
@@ -213,7 +218,7 @@ class RenderUtils(object):
         
         return face_patch_gaze,e_v,e_h
 
-    def render_gaze_redirect_res(self, net, code_info_1, code_info_2, nums, scale_factor,gaze_dim,vis_vect=True, D6_rotation=False):
+    def render_gaze_redirect_res(self, net, code_info_1, code_info_2, nums, scale_factor,gaze_dim,vis_vect=True, D6_rotation=False,cam_info = None):
         ##code1 and code2 only have difference in last few columns (gaze tensor)
         batch_xy = self.ray_xy
         batch_uv = self.ray_uv
@@ -221,7 +226,8 @@ class RenderUtils(object):
         res_imgvec_list = []
         shape_code = code_info_1["shape_code"]
         appea_code = code_info_1["appea_code"]
-        
+        if cam_info is None:
+            cam_info = self.base_cam_info
         loop_bar = tqdm(range(nums), leave=True)
         e_h_ave = []
         e_v_ave = []
@@ -244,9 +250,9 @@ class RenderUtils(object):
             }
             
             with torch.set_grad_enabled(False):
-                pred_dict = net("test",batch_xy, batch_uv, **code_info,**self.base_cam_info)
+                pred_dict = net("test",batch_xy, batch_uv, **code_info,**cam_info)
 
-            inmat_np = torch.linalg.inv(self.base_cam_info['batch_inv_inmats']).detach().cpu().numpy()
+            inmat_np = torch.linalg.inv(cam_info['batch_inv_inmats']).detach().cpu().numpy()
             inmat_np = inmat_np.reshape((3,3))
             distortion_np = np.zeros([1,5])
             inmat_np[0,0] *=10; inmat_np[1,1] *=10; inmat_np[0,2] *=10; inmat_np[1,2] *=10
@@ -257,7 +263,7 @@ class RenderUtils(object):
             coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
 
             if vis_vect:
-                face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
+                face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)            
                 cv2.putText(img=face_patch_gaze, text=str(pred_gaze_np), org=(0, 50), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(255, 0, 0),thickness=1)
                 
                 # cv2.imshow('current rendering', face_patch_gaze)
