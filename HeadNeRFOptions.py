@@ -35,7 +35,7 @@ class BaseOptions(object):
 
 
 dataset_config={
-    'dataset_path': './XGaze_data/processed_data/',
+    'dataset_path': './XGaze_data/processed_data_10cam',
     'opt': BaseOptions(),
     'keys_to_use':['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008','subject0009','subject0010','subject0013'], 
     'sub_folder':'train',

@@ -158,9 +158,9 @@ class Trainer(object):
             self.face_gaze = face_gaze.clone()
             if self.use_6D_rotation:
                 ##the transformation is non-linear cannot be directly scaled
-                face_gaze = data_info['gaze_6d'].float()
+                face_gaze = data_info['gaze_6d'].float() * self.eye_gaze_scale_factor
             else:
-                face_gaze = (face_gaze) * self.eye_gaze_scale_factor #normalized between 0 to 1    
+                face_gaze = (face_gaze) * self.eye_gaze_scale_factor
 
             face_gaze = face_gaze.repeat(1,self.eye_gaze_dim//face_gaze.size(1))
             shape_code = torch.cat([base_iden, base_expr,face_gaze], dim=-1)
@@ -234,7 +234,7 @@ class Trainer(object):
     
     def eye_gaze_displacement(self,data_info,code_info,cam_info):
         if self.use_6D_rotation:
-            face_gaze_new = data_info['gaze_disp_d6'].float()
+            face_gaze_new = data_info['gaze_disp_d6'].float() * self.eye_gaze_scale_factor
         else:
             face_gaze_new = data_info['gaze_disp'].float() * self.eye_gaze_scale_factor
             
