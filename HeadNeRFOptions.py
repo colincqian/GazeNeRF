@@ -45,7 +45,8 @@ dataset_config={
     'index_file':None, 
     'is_load_label':True,
     'device': 'cpu',
-    'filter_view': False
+    'filter_view': False,
+    'use_template':True
 
 }
 

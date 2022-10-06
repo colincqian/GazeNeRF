@@ -164,7 +164,7 @@ class HeadNeRFLossUtils(object):
         disp_img = torch.nan_to_num(disp_img, nan=0.0)
         
         non_eye_mask_tensor_c3b = non_eye_mask_tensor.expand(-1, 3, -1, -1)
-
+        res_img = res_img.view(disp_img.size())
         image_disp_loss = F.l1_loss(res_img[non_eye_mask_tensor_c3b], disp_img[non_eye_mask_tensor_c3b])
 
         self.fa_func = face_alignment.FaceAlignment(face_alignment.LandmarksType._2D, flip_input=False)
@@ -234,8 +234,8 @@ class HeadNeRFLossUtils(object):
                           1 * loss_dict["lm_disp_loss"]
             if 'template_img_gt' in disp_pred_dict:
                 #use template img
-                pred_dic= {  "merge_img" : disp_pred_dict['template_img_gt']  }
-                template_eye_loss = self.calc_disp_loss(pred_dic,disp_pred_dict["coarse_dict"],eye_mask)
+                pred_dic= {  "merge_img" : disp_pred_dict['template_img_gt'].to(self.device)  }
+                template_eye_loss = self.calc_disp_loss(pred_dic,disp_pred_dict["coarse_dict"],eye_mask)["image_disp_loss"]
                 loss_dict['template_eye_loss'] = template_eye_loss
                 total_loss += 10 * loss_dict['template_eye_loss'] 
 

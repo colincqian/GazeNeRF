@@ -255,7 +255,7 @@ class GazeDataset_normailzed_from_hdf(Dataset):
         self.hdf = None
         
 
-
+        # self.debug_iter(0)
         
 
     def __len__(self):
@@ -362,7 +362,6 @@ class GazeDataset_normailzed_from_hdf(Dataset):
             mask = np.where(np.reshape(hdfs_file['cam_index'],(-1)) == cam_index)[0]
             target_index = mask[np.argmin(abs(hdfs_file['face_gaze'][mask,0]) + abs(hdfs_file['face_gaze'][mask,1]))]
             #assert np.max(hdfs_file['face_gaze'][target_index,:]) < 0.1 ,f"face gaze {hdfs_file['face_gaze'][target_index,:]} is too large" #make sure the gaze is close enough to zero
-            print(f"face gaze {hdfs_file['face_gaze'][target_index,:]}")
             #self.template_image_index[(subject_idx,cam_index)] = target_index
             template_image = hdfs_file['face_patch'][target_index]
 
@@ -486,6 +485,9 @@ class GazeDataset_normailzed_from_hdf(Dataset):
         camera_index = self.hdf['cam_index'][img_index][0]
 
         camera_parameter = self.camera_loader[camera_index]  ##ground truth camera info
+    
+        import ipdb
+        ipdb.set_trace()
 
         self.load_3dmm_params(img_index)
         import ipdb

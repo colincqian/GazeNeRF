@@ -1,4 +1,4 @@
-python train_headnerf.py --headnerf_options "TrainedModels/model_Reso32HR.pth" \
+python -m ipdb train_headnerf.py --headnerf_options "TrainedModels/model_Reso32HR.pth" \
                          --batch_size 2 \
                          --gpu_id 3 \
                          --include_eye_gaze True \
@@ -7,5 +7,5 @@ python train_headnerf.py --headnerf_options "TrainedModels/model_Reso32HR.pth" \
                          --print_freq 50 \
                          --gaze_D6_rotation False \
                          --eye_gaze_disentangle True \
-                         --comment 'gaze_dim 64,disentanglement True, 10 cam views' 
+                         --comment 'gaze_dim 64,disentanglement True, 10 cam views, use template as the disp face patch' 
 

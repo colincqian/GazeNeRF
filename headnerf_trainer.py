@@ -243,7 +243,7 @@ class Trainer(object):
         pred_dict_p = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
 
         if 'template_img' in data_info:
-            pred_dict_p['template_img_gt'] = data_info['template_img'].clone()
+            pred_dict_p['template_img_gt'] = data_info['template_img']
 
         return pred_dict_p,face_gaze_new
 
