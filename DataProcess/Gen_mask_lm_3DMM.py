@@ -1,3 +1,4 @@
+from locale import D_T_FMT
 from pyclbr import Class
 from re import sub
 import h5py
@@ -21,7 +22,7 @@ from FittingNL3DMM import FittingNL3DMM_from_h5py
 
 
 nl3d_param_shape = {
-    "code": (306,),
+    "code": (306,), #change this if u change the code
     "w2c_Rmat":(3,3),
     "w2c_Tvec":(3,),
     "inmat":(3,3),
@@ -31,7 +32,7 @@ nl3d_param_shape = {
 }
 
 class Data_Processor(object):
-    def __init__(self,img_dir,save_dir,img_size, intermediate_size,hdf_file=False):
+    def __init__(self,img_dir,save_dir,img_size, intermediate_size,hdf_file=False,test_percentage=0.1):
         self.img_dir = img_dir
         self.save_dir = save_dir
         self.img_size = img_size
@@ -40,6 +41,7 @@ class Data_Processor(object):
             self.hdf_input_dir = img_dir
         else:
             self.hdf_input_dir = None
+        self.test_data_percentage = test_percentage
         self.load_utils()
 
     def generate_head_mask(self,image):
@@ -76,7 +78,7 @@ class Data_Processor(object):
         lm_path = os.path.join(image_dir,str(image_idx).zfill(6)+'_lm2d.txt')
         return np.loadtxt(lm_path, dtype = np.float32)
 
-    def process_data_from_hdf_file(self,sub_id,image_patch_size=250):
+    def process_data_from_hdf_file(self,sub_id,image_patch_size=250,max_num=1e5):
         
 
         if self.hdf_input_dir is None:
@@ -88,96 +90,110 @@ class Data_Processor(object):
             print(f'Current subject {sub_id} not exist!!')
             return
 
-        with h5py.File(os.path.join(self.save_dir,f'processed_subject{str(sub_id).zfill(4)}'),'w') as fid,h5py.File(input_file,'r') as src_file:
+        with h5py.File(os.path.join(self.save_dir,f'processed_subject{str(sub_id).zfill(4)}'),'w') as fid,\
+                h5py.File(os.path.join(self.save_dir,f'processed_test_sub{str(sub_id).zfill(4)}'),'w') as fid_test,\
+                h5py.File(input_file,'r') as src_file:
             
             self.include_gaze = False
+
+            #train test data split
             num_data = src_file.attrs['data_size']
+            num_data = min(max_num , num_data)
+            num_data_test = int(num_data * self.test_data_percentage)
+            num_data_train = num_data - num_data_test
+            print(f'Generate {num_data_train} training samples, {num_data_test} testing samples!')
 
-            try:
-                face_patches = src_file['face_patch']
-            except:
-                print('face patch not found!!')
-                fid.create_dataset("valid_mask", data = [False]*num_data)##if num data is zero, valid mask should be []
-                return
+            indexs = np.random.permutation(num_data)
+            training_indexs,testing_indexs = indexs[:num_data_train],indexs[num_data_train:]
 
-            if 'face_gaze' in src_file.keys():
-                self.include_gaze = True
-                gazes = src_file['face_gaze']
-            frames_indexs = src_file['frame_index']
-            cam_indexes = src_file['cam_index']
+            self.main_process(training_indexs, fid ,src_file=src_file,image_patch_size=image_patch_size,mode='train')
+            self.main_process(testing_indexs, fid_test ,src_file=src_file,image_patch_size=image_patch_size,mode='test')
 
-            if 'mask' not in fid.keys():
-                output_face_mask= fid.create_dataset("mask", shape=(num_data, image_patch_size, image_patch_size),
-                                                                        compression='lzf', dtype=np.uint8,
-                                                                        chunks=(1, image_patch_size, image_patch_size))
-                output_eye_mask= fid.create_dataset("eye_mask", shape=(num_data, image_patch_size, image_patch_size),
-                                                                        compression='lzf', dtype=np.uint8,
-                                                                        chunks=(1, image_patch_size, image_patch_size))
-                output_lm2d= fid.create_dataset("lm2d", shape=(num_data, 136),
-                                                                        dtype=float,chunks=(1, 136))
-                nl3d_param_output={}
-                for key,shape in nl3d_param_shape.items():
-                    nl3d_param_output[key]= fid.create_dataset(f"nl3dmm/{key}", shape=(num_data, *shape),
-                                                            dtype=float,chunks=(1, *shape))
+            
+    def main_process(self,data_index,fid,src_file,image_patch_size,mode='train'):
+        data_index = np.sort(data_index) ##
+        num_data = len(data_index)
+        try:
+            face_patches = src_file['face_patch']
+        except:
+            print('face patch not found!!')
+            fid.create_dataset("valid_mask", data = [False]*num_data)##if num data is zero, valid mask should be []
+            return
 
-                output_frame_index = fid.create_dataset("frame_index", shape=(num_data, 1),
-                                                dtype=int, chunks=(1, 1),data = frames_indexs[:num_data])
-                output_cam_index = fid.create_dataset("cam_index", shape=(num_data, 1),
-                                                    dtype=int, chunks=(1, 1), data = cam_indexes[:num_data])
-                if self.include_gaze:   
-                    output_face_gaze = fid.create_dataset("face_gaze", shape=(num_data, 2),
-                                                    dtype=float, chunks=(1, 2), data = gazes[:num_data,:])
+        if 'face_gaze' in src_file.keys():
+            self.include_gaze = True
+            gazes = src_file['face_gaze']
+        frames_indexs = src_file['frame_index']
+        cam_indexes = src_file['cam_index'],
 
-                output_face_patches= fid.create_dataset("face_patch", shape=(num_data, image_patch_size, image_patch_size,3),
-                                                                        compression='lzf', dtype=np.uint8,
-                                                                       chunks=(1, image_patch_size, image_patch_size,3))
+        if 'mask' not in fid.keys():
+            output_face_mask= fid.create_dataset("mask", shape=(num_data, image_patch_size, image_patch_size),
+                                                                    compression='lzf', dtype=np.uint8,
+                                                                    chunks=(1, image_patch_size, image_patch_size))
+            output_eye_mask= fid.create_dataset("eye_mask", shape=(num_data, image_patch_size, image_patch_size),
+                                                                    compression='lzf', dtype=np.uint8,
+                                                                    chunks=(1, image_patch_size, image_patch_size))
+            output_lm2d= fid.create_dataset("lm2d", shape=(num_data, 136),
+                                                                    dtype=float,chunks=(1, 136))
+            nl3d_param_output={}
+            for key,shape in nl3d_param_shape.items():
+                nl3d_param_output[key]= fid.create_dataset(f"nl3dmm/{key}", shape=(num_data, *shape),
+                                                        dtype=float,chunks=(1, *shape))
 
-            valid_mask = [False] * num_data
-            for num_i in tqdm(range(num_data)):
-                face_patch = face_patches[num_i, :]  # the face patch
-                # if 'face_gaze' in fid.keys():
-                #     gaze = fid['face_gaze'][num_i, :]   # the normalized gaze direction with size of 2 dimensions as horizontal and vertical gaze directions.
-                # frame_index = fid['frame_index'][num_i, 0]  # the frame index
-                # cam_index = fid['cam_index'][num_i, 0]   # the camera index     
-                face_patch = cv2.resize(face_patch, (image_patch_size, image_patch_size))   
-
-                mask, eye_mask, lm2d, nl3dmm_param = self.process_mask_and_landmark_for_single_image(face_patch)
-
-                # face_patch_loaded = self.load_image(num_i,'test_data/playground')
-                # lm_loaded = self.load_lm2d(num_i,'test_data/playground')
+            output_frame_index = fid.create_dataset("frame_index", shape=(num_data, 1),
+                                            dtype=int, chunks=(1, 1),data = frames_indexs[data_index])
+            output_cam_index = fid.create_dataset("cam_index", shape=(num_data, 1),
+                                                dtype=int, chunks=(1, 1), data = cam_indexes[data_index])
+            if self.include_gaze:   
+                output_face_gaze = fid.create_dataset("face_gaze", shape=(num_data, 2),
+                                                dtype=float, chunks=(1, 2), data = gazes[data_index,:])
 
 
-                output_face_patches[num_i] = face_patch
-                output_face_mask[num_i] = mask
-                output_eye_mask[num_i] = eye_mask
-                output_lm2d[num_i] = lm2d
-                if nl3dmm_param is not None:
-                    valid_mask[num_i] = True
-                    for key in nl3d_param_output.keys():
-                        nl3d_param_output[key][num_i] = nl3dmm_param[key]
-                if np.isnan(nl3d_param_output['code'][num_i]).any():
-                    ##nan detected
-                    print('detect nan in nl3d parameters')
-                    valid_mask[num_i] = False
-                
-                    # import ipdb
-                    # ipdb.set_trace()
-                    # cv2.imshow('current mask', mask)
-                    # cv2.waitKey(0) 
-                    # cv2.imshow('masked image', eye_mask)
-                    # cv2.waitKey(0) 
-                    # face_patch[mask!=255] = 0
-                    # cv2.imshow('masked image', face_patch)
-                    # cv2.waitKey(0) 
-                    # face_patch[eye_mask!=255] = 0
-                    # cv2.imshow('masked image', face_patch)
-                    # cv2.waitKey(0) 
-                    # cv2.destroyAllWindows() 
+            output_face_patches= fid.create_dataset("face_patch", shape=(num_data, image_patch_size, image_patch_size,3),
+                                                                    compression='lzf', dtype=np.uint8,
+                                                                    chunks=(1, image_patch_size, image_patch_size,3))
 
+        valid_mask = [False] * num_data
+        for num_i in tqdm(range(num_data)):
 
+            ind = data_index[num_i]
 
+            face_patch = face_patches[ind, :]  # the face patch
+            
+            face_patch = cv2.resize(face_patch, (image_patch_size, image_patch_size))   
 
-            fid.create_dataset("valid_mask", data = valid_mask)##if num data is zero, valid mask should be []
+            mask, eye_mask, lm2d, nl3dmm_param = self.process_mask_and_landmark_for_single_image(face_patch)
+
+            output_face_patches[num_i] = face_patch
+            output_face_mask[num_i] = mask
+            output_eye_mask[num_i] = eye_mask
+            output_lm2d[num_i] = lm2d
+            if nl3dmm_param is not None:
+                valid_mask[num_i] = True
+                for key in nl3d_param_output.keys():
+                    nl3d_param_output[key][num_i] = nl3dmm_param[key]
+            if np.isnan(nl3d_param_output['code'][num_i]).any():
+                ##nan detected
+                print('detect nan in nl3d parameters')
+                valid_mask[num_i] = False
+            
+                # import ipdb
+                # ipdb.set_trace()
+                # cv2.imshow('current mask', mask)
+                # cv2.waitKey(0) 
+                # cv2.imshow('masked image', eye_mask)
+                # cv2.waitKey(0) 
+                # face_patch[mask!=255] = 0
+                # cv2.imshow('masked image', face_patch)
+                # cv2.waitKey(0) 
+                # face_patch[eye_mask!=255] = 0
+                # cv2.imshow('masked image', face_patch)
+                # cv2.waitKey(0) 
+                # cv2.destroyAllWindows() 
+
+        fid.create_dataset("valid_mask", data = valid_mask)##if num data is zero, valid mask should be []
+        fid.create_dataset("train_test_split", data = data_index)
+        fid.attrs['mode'] = mode
         
             
 

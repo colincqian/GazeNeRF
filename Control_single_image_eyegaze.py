@@ -688,16 +688,16 @@ if __name__ == "__main__":
     #tt.sample_face_gaze_ground_truth_image(hdf_file,image_sample_num=400,resolution=21) ##sample gt images and bilinear interpolate
 
     # same subjects for 10 cams
-    for cam_id in cam_included:
-        print(f'Sampling {cam_id} !')
-        save_root = os.path.join('experiment_document/gridsample_images/',str(cam_id))
-        tt.gridsample_face_gaze(hdf_file,image_index,save_root=save_root,resolution=21,print_freq=10,cam_index=cam_id)
+    # for cam_id in cam_included:
+    #     print(f'Sampling {cam_id} !')
+    #     save_root = os.path.join('experiment_document/gridsample_images/',str(cam_id))
+    #     tt.gridsample_face_gaze(hdf_file,image_index,save_root=save_root,resolution=21,print_freq=10,cam_index=cam_id)
         
     # same cam setting for 10 subjects
     for subject_id in subject_included:
         print(f'Sampling {subject_id} !')
         hdf_file = 'XGaze_data/processed_data/processed_' + subject_id
-        save_root = os.path.join('experiment_document/gridsample_images/',subject_id)
+        save_root = os.path.join('experiment_document/gridsample_images_template_disp/',subject_id)
         tt.gridsample_face_gaze(hdf_file,image_index,save_root=save_root,resolution=21,print_freq=10)
         
 
