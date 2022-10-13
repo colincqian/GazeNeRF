@@ -1,8 +1,9 @@
 
+from tkinter.tix import X_REGION
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+from .Coordmap import AddCoords
 def _xavier_init(net_layer):
     """
     Performs the Xavier weight initialization of the net layer.
@@ -85,3 +86,65 @@ class MLPforNeRF(nn.Module):
 
         return rgb, density
 
+
+
+class MLPforGaze(nn.Module):
+
+    def __init__(self, input_channels, n_layers = 8, h_channel = 256, res_nfeat = 3) -> None:
+        super().__init__()
+
+        self.input_channels = input_channels
+        self.n_layers = n_layers
+        self.h_channel = h_channel
+        self.res_nfeat = res_nfeat
+        
+        self.add_coord = AddCoords(radius_channel=False)
+        self._make_layers()
+
+    def _make_layers(self):
+        # layers = []
+        # layers.append(nn.Conv2d(self.vp_channels, self.h_channel, kernel_size=1, stride= 1, padding=0))
+        self.add_module("FeaExt_module_0", nn.Conv2d(self.input_channels, self.h_channel, kernel_size=1, stride= 1, padding=0))
+        # _xavier_init(self._modules["FeaExt_module_0"])
+        # self._modules["FeaExt_module_0"].bias.data[:] = 0.0
+        
+        for i in range(0, self.n_layers - 1):
+            # layers.append(nn.Conv2d(self.h_channel, self.h_channel, kernel_size=1, stride=1, padding=0))
+            self.add_module("FeaExt_module_%d"%(i + 1), 
+                    nn.Conv2d(self.h_channel, self.h_channel, kernel_size=1, stride=1, padding=0))
+
+            _xavier_init(self._modules["FeaExt_module_%d"%(i + 1)])
+        
+        self.add_module("RGB_layer_0", nn.Conv2d(self.h_channel, self.h_channel, kernel_size=1, stride=1, padding=0))
+        _xavier_init(self._modules["RGB_layer_0"])
+        
+        self.add_module("RGB_layer_1", nn.Conv2d(self.h_channel, self.h_channel//2, kernel_size=1, stride=1, padding=0))
+        # _xavier_init(self._modules["RGB_layer_1"])
+        # self._modules["RGB_layer_1"].bias.data[:] = 0.0
+        
+        self.add_module("RGB_layer_2", nn.Conv2d(self.h_channel//2, self.res_nfeat, kernel_size=1, stride=1, padding=0))
+
+
+    def forward(self, batch_embed_vps):
+        '''
+        batch_embed_vps: [B, C_1, N_r, N_s]
+        batch_embed_vds: [B, C_2, N_r, N_s]
+        '''
+
+        x = batch_embed_vps
+        x = self.add_coord(x) # add coord map to x 
+
+        for i in range(self.n_layers):
+            x = self._modules["FeaExt_module_%d"%i](x)
+            x = F.relu(x)
+            
+        x = self._modules["RGB_layer_0"](x)
+        x = self._modules["RGB_layer_1"](x)
+        x = F.relu(x)
+        rgb = self._modules["RGB_layer_2"](x)
+        
+
+        if self.res_nfeat == 3:
+            rgb = torch.sigmoid(rgb)
+
+        return rgb

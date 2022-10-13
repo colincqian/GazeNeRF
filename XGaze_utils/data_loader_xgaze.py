@@ -255,7 +255,7 @@ class GazeDataset_normailzed_from_hdf(Dataset):
         self.hdf = None
         
 
-        # self.debug_iter(0)
+        #self.debug_iter(0)
         
 
     def __len__(self):
@@ -759,6 +759,14 @@ def plot_eye_gaze_distribution(dataloader,color='b'):
         gaze = data_info['gaze']
         gaze_np = gaze.view(-1).cpu().detach().numpy()
         plt.scatter(gaze_np[0],gaze_np[1],s=5,c=color)
+
+def visualize_tensor(img_tensor):
+    img_size = img_tensor.size(-1)
+    image_np = (img_tensor.view(img_size,img_size,-1)).cpu().detach().numpy()
+    cv2.imshow('image mask', image_np)
+    cv2.waitKey(0) 
+    cv2.destroyAllWindows() 
+    
     
 if __name__=='__main__':
 
@@ -802,6 +810,19 @@ if __name__=='__main__':
                     num_workers=4,
                     dataset_config=dataset_config
                     )
+        # for data_info in data_loader_train:
+        #     import torch.nn as nn
+        #     mask_img = data_info['eye_mask']
+        #     img_size = mask_img.size(-1)
+        #     mask_img = mask_img.view(1,img_size,img_size)
+        #     visualize_tensor(mask_img)
+        #     m = nn.AvgPool2d(16, stride=8,padding=4)
+        #     output_mask_img = m(mask_img.float()) 
+        #     visualize_tensor(output_mask_img)
+        #     import ipdb
+        #     ipdb.set_trace()
+
+
         plot_eye_gaze_distribution(data_loader_train,color=np.array([colors[idx]]))
     plt.show()
     # gaze_dataset = GazeDataset_normailzed(**dataset_config)

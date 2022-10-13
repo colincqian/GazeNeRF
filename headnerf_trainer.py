@@ -1,4 +1,5 @@
 from cmath import isnan
+from email.policy import strict
 import select
 
 
@@ -17,7 +18,7 @@ import numpy as np
 import shutil
 
 from HeadNeRFOptions import BaseOptions
-from NetWorks.HeadNeRFNet import HeadNeRFNet
+from NetWorks.HeadNeRFNet import HeadNeRFNet,HeadNeRFNet_Gaze
 from Utils.HeadNeRFLossUtils import HeadNeRFLossUtils
 from Utils.RenderUtils import RenderUtils
 from Utils.Eval_utils import calc_eval_metrics
@@ -91,12 +92,12 @@ class Trainer(object):
             para_dict = check_dict["para"]
             self.opt = BaseOptions(para_dict)
 
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=self.include_eye_gaze,eye_gaze_dim=self.eye_gaze_dim)  
+            self.model = HeadNeRFNet_Gaze(self.opt, include_vd=False, hier_sampling=False,eye_gaze_dim=self.eye_gaze_dim)  
             self._load_model_parameter(check_dict)
             print(f'load model parameter from {self.headnerf_options},set include_eye gaze to be {self.include_eye_gaze}')
         else:
             self.opt = BaseOptions()
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=self.include_eye_gaze,eye_gaze_dim=self.eye_gaze_dim)   
+            self.model = HeadNeRFNet_Gaze(self.opt, include_vd=False, hier_sampling=False,eye_gaze_dim=self.eye_gaze_dim)   
             print(f'Train model from scratch, set include_eye gaze to be {self.include_eye_gaze}')     
         
         ##device setting
@@ -137,7 +138,7 @@ class Trainer(object):
                 assert new_weight.size(1) == c + self.eye_gaze_dim
                 check_dict["net"][key] = new_weight
             print(f'Eye gaze feature dimension: {self.eye_gaze_dim}')
-        self.model.load_state_dict(check_dict["net"])
+        self.model.load_state_dict(check_dict["net"],strict=False)
 
     def _build_tool_funcs(self):
         self.loss_utils = HeadNeRFLossUtils(device=self.device)
@@ -190,7 +191,12 @@ class Trainer(object):
             "shape_code":shape_code.to(self.device), 
             "appea_code":appea_code.to(self.device), 
         }
-        return code_info,cam_info
+
+        gaze_info = {
+            "input_gaze": face_gaze.repeat(1,self.eye_gaze_dim//face_gaze.size(1)),
+            "eye_mask": data_info['eye_mask']
+        }
+        return code_info,cam_info,gaze_info
     
     def train(self):
         self.logging_config('./logs')
@@ -253,9 +259,9 @@ class Trainer(object):
         for iter,data_info in loop_bar:
 
             with torch.set_grad_enabled(True):
-                code_info,cam_info = self.build_code_and_cam_info(data_info)
+                code_info,cam_info,gaze_info = self.build_code_and_cam_info(data_info)
 
-                pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
+                pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info, **gaze_info)
                 
                 if self.disentangle:
                     disp_pred_dict,disp_gaze = self.eye_gaze_displacement(data_info,code_info,cam_info)
@@ -300,9 +306,9 @@ class Trainer(object):
         uv = self.render_utils.ray_uv.to(self.device).expand(self.val_loader.batch_size,-1,-1)
         for iter,data_info in loop_bar:
             with torch.set_grad_enabled(False):
-                code_info,cam_info = self.build_code_and_cam_info(data_info)
+                code_info,cam_info,gaze_info = self.build_code_and_cam_info(data_info)
 
-                pred_dict = self.model( "test", xy, uv,  **code_info, **cam_info)
+                pred_dict = self.model( "test", xy, uv,  **code_info, **cam_info,**gaze_info)
 
                 gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
 
