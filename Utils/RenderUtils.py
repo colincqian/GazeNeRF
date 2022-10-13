@@ -160,7 +160,7 @@ class RenderUtils(object):
         return vertical_error,horizontal_error
     
 
-    def render_face_with_gaze(self,net,code_info,face_gaze,scale_factor,gaze_dim,vis_vect=True,cam_info = None):
+    def render_face_with_gaze(self,net,code_info,face_gaze,scale_factor,gaze_dim,cam_info = None):
         batch_xy = self.ray_xy
         batch_uv = self.ray_uv
         shape_code = code_info["shape_code"]
@@ -190,10 +190,10 @@ class RenderUtils(object):
         coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
         coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         
-        if vis_vect:    
-            return self.render_gaze_vect(coarse_fg_rgb.copy(),cam_info,face_gaze)
+        # if vis_vect:    
+        #     return self.render_gaze_vect(coarse_fg_rgb.copy(),cam_info,face_gaze)
 
-        return coarse_fg_rgb,0,0
+        return coarse_fg_rgb,cam_info,face_gaze
 
     def render_gaze_vect(self,coarse_fg_rgb,cam_info,face_gaze):
         try:

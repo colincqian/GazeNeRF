@@ -306,7 +306,12 @@ class Trainer(object):
 
                 gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
 
-                eval_metrics = calc_eval_metrics(pred_dict=pred_dict,gt_rgb=gt_img.to(self.device),mask_tensor=mask_img.to(self.device),vis=False)
+                coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
+                pred_image= (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+                gt_img = gt_img.to(self.device)
+                label_image_np = (gt_img[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+
+                eval_metrics = calc_eval_metrics(pred_image,label_image_np,vis=False)
                 
                 output_dict['SSIM'] += eval_metrics['SSIM']
                 output_dict['PSNR'] += eval_metrics['PSNR']
