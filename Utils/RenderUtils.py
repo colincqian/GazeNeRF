@@ -11,10 +11,7 @@ import math
 
 import sys
 sys.path.insert(1, '/home/colinqian/Project/ETH-XGaze/ETH-XGaze')
-try:
-    from demo import face_gaze_estimiator,draw_gaze
-except:
-    pass
+from demo import face_gaze_estimiator,draw_gaze
 
 from Utils.D6_rotation import gaze_to_d6
 
@@ -167,16 +164,20 @@ class RenderUtils(object):
         appea_code = code_info["appea_code"]
         if cam_info is None:
             cam_info = self.base_cam_info
+
         face_gaze = face_gaze.view(-1)
         face_gaze_feat = face_gaze.repeat(1,gaze_dim//face_gaze.size(0)) * scale_factor
 
-        shape_code[0,-gaze_dim:]= face_gaze_feat
-
-        code_info = {
-            "bg_code":None,
-            "shape_code":shape_code, 
-            "appea_code":appea_code
-        }
+        if "input_gaze" in code_info:
+            code_info["input_gaze"] = face_gaze_feat.float()
+            print(code_info["input_gaze"])
+        else:
+            shape_code[0,-gaze_dim:]= face_gaze_feat
+            code_info = {
+                "bg_code":None,
+                "shape_code":shape_code, 
+                "appea_code":appea_code
+            }
 
         with torch.set_grad_enabled(False):
             pred_dict = net("test",batch_xy, batch_uv, **code_info,**cam_info)
@@ -190,12 +191,15 @@ class RenderUtils(object):
         coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
         coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         
+
         # if vis_vect:    
         #     return self.render_gaze_vect(coarse_fg_rgb.copy(),cam_info,face_gaze)
 
         return coarse_fg_rgb,cam_info,face_gaze
 
     def render_gaze_vect(self,coarse_fg_rgb,cam_info,face_gaze):
+        #face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
+
         try:
             face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
         except:

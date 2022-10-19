@@ -77,7 +77,7 @@ class HeadNeRFNet_Gaze(nn.Module):
                                                 min_feat=32, featmap_size=self.featmap_size, img_size=self.pred_img_size)
         
         self.gaze_feat_predictor = MLPforGaze(input_channels=1 + self.eye_gaze_dim + 2, h_channel = 256, res_nfeat=self.featmap_nc)
-
+        
     def eye_gaze_branch(self,input_gaze,eye_mask_tensor):
         #coord_map = get_coord_maps(size = self.featmap_size).repeat(batch_size,1,1,1)
         
@@ -169,8 +169,8 @@ class HeadNeRFNet_Gaze(nn.Module):
         cur_appea_code = appea_code.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, n_r, self.num_sample_coarse) #torch.Size([1, 127]) -> torch.Size([1, 127, 1024, 64])
 
 
-        input_gaze = kwargs["input_gaze"]
-        eye_mask_tensor = kwargs["eye_mask"]
+        input_gaze = kwargs["input_gaze"].cuda()
+        eye_mask_tensor = kwargs["eye_mask"].cuda()
         c_ori_res, batch_weight = self.calc_color_with_code(
             fg_vps, cur_shape_code, cur_appea_code, FGvp_embedder, FGvd_embedder, FG_zdists, FG_zvals, fine_level = False, input_gaze=input_gaze, eye_mask_tensor=eye_mask_tensor
         )
@@ -226,7 +226,7 @@ class HeadNeRFNet_Gaze(nn.Module):
 
 ############original version of HeadNeRF################################
 class HeadNeRFNet(nn.Module):
-    def __init__(self, opt: BaseOptions, include_vd, hier_sampling,include_gaze=False,eye_gaze_dim=2) -> None:
+    def __init__(self, opt: BaseOptions, include_vd, hier_sampling,include_gaze=True,eye_gaze_dim=2) -> None:
         super().__init__()
 
         self.hier_sampling = hier_sampling
