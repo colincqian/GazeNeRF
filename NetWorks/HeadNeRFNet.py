@@ -127,13 +127,15 @@ class HeadNeRFNet_Gaze(nn.Module):
         bg_featmap = self.neural_render.get_bg_featmap() #torch.Size([1, 256, 32, 32])
         bg_img = self.neural_render(bg_featmap) #torch.Size([1, 3, 512, 512])
 
+        template_img = self.neural_render(fg_feat + bg_alpha * bg_featmap)
         ##Map feature map I_f(256x32x32) to image I (3x256x256)
         merge_featmap = fg_feat + bg_alpha * bg_featmap + eye_gaze_feat #torch.Size([1, 256, 32, 32])
         merge_img = self.neural_render(merge_featmap) #torch.Size([1, 3, 512, 512])
 
         res = {
             "merge_img": merge_img, 
-            "bg_img": bg_img
+            "bg_img": bg_img,
+            "template_img":template_img
         }
         
         return res, ori_batch_weight

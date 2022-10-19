@@ -194,7 +194,7 @@ class Trainer(object):
 
         gaze_info = {
             "input_gaze": face_gaze.repeat(1,self.eye_gaze_dim//face_gaze.size(1)),
-            "eye_mask": data_info['eye_mask']
+            "eye_mask": data_info['img_mask'] #data_info['eye_mask']
         }
         return code_info,cam_info,gaze_info
     
@@ -257,7 +257,7 @@ class Trainer(object):
     def train_one_epoch(self, epoch, data_loader, is_train=True):
         loop_bar = tqdm(enumerate(data_loader), leave=False, total=len(data_loader))
         for iter,data_info in loop_bar:
-
+            
             with torch.set_grad_enabled(True):
                 code_info,cam_info,gaze_info = self.build_code_and_cam_info(data_info)
 
@@ -289,7 +289,7 @@ class Trainer(object):
                 else:
                     loop_bar.set_description("Opt, Head_loss/Img_disp/Lm_disp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["lm_disp_loss"].item()) )  
             else:
-                loop_bar.set_description("Opt, Head_loss: %.6f " % (batch_loss_dict["head_loss"].item()) )  
+                loop_bar.set_description("Opt, Head_loss/Template_loss/eye_loss: %.6f / %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["template_loss"].item(),batch_loss_dict["eye_loss"].item()) )  
 
 
                 
