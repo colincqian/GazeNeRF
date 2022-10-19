@@ -122,14 +122,17 @@ class HeadNeRFLossUtils(object):
         return res_dict
     
     
-    def calc_data_loss(self, data_dict, gt_rgb, head_mask_c1b, nonhead_mask_c1b):
+    def calc_data_loss(self, data_dict, gt_rgb, head_mask_c1b, nonhead_mask_c1b,use_template=False):
         
         bg_value = self.bg_value
         
         bg_img = data_dict["bg_img"]
         bg_loss = torch.mean((bg_img - bg_value) * (bg_img - bg_value))
         
-        res_img = data_dict["merge_img"]
+        if use_template:
+            res_img = data_dict["template_img"]
+        else:
+            res_img = data_dict["merge_img"]
         res_img = torch.nan_to_num(res_img, nan=0.0)
         head_mask_c3b = head_mask_c1b.expand(-1, 3, -1, -1)
         head_loss = F.mse_loss(res_img[head_mask_c3b], gt_rgb[head_mask_c3b])
@@ -195,7 +198,14 @@ class HeadNeRFLossUtils(object):
 
 
     def calc_total_loss(self, delta_cam_info, opt_code_dict, pred_dict, gt_rgb, mask_tensor, disp_pred_dict, eye_mask_tensor=None):
-        
+        weight = {
+
+            "bg_loss": 1.0,  
+            "head_loss": 0.0,  
+            "nonhaed_loss": 1.0,  
+            "vgg": 0.0
+    
+        }
         # assert delta_cam_info is not None
         head_mask = (mask_tensor >= 0.5)  
         nonhead_mask = (mask_tensor < 0.5)  
@@ -205,7 +215,7 @@ class HeadNeRFLossUtils(object):
         
         total_loss = 0.0
         for k in loss_dict:
-            total_loss += loss_dict[k]
+            total_loss += loss_dict[k] * weight[k]
             
         #cam loss
         if delta_cam_info is not None:
@@ -226,7 +236,14 @@ class HeadNeRFLossUtils(object):
             noneye_mask = torch.bitwise_and((eye_mask_tensor < 0.5),head_mask)
             loss_dict_eye = self.calc_data_loss(coarse_data_dict, gt_rgb, eye_mask, noneye_mask)
             loss_dict['eye_loss'] = loss_dict_eye['head_loss']
-            total_loss += loss_dict['eye_loss'] * 10
+            total_loss += loss_dict['eye_loss'] * 20
+        
+        #template loss
+        if eye_mask_tensor is not None:
+            #template loss for the non_eye region
+            loss_dict_eye = self.calc_data_loss(coarse_data_dict, gt_rgb,noneye_mask,eye_mask,use_template=True)
+            loss_dict['template_loss'] = loss_dict_eye['head_loss']
+            total_loss += loss_dict['template_loss'] 
         
         if disp_pred_dict is not None and eye_mask_tensor is not None:
             loss_dict.update(self.calc_disp_loss(pred_dict["coarse_dict"],disp_pred_dict["coarse_dict"],non_eye_mask_tensor=noneye_mask))
