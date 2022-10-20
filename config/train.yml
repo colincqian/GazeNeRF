@@ -28,6 +28,8 @@ dataset_config:
   use_template: True #whethre to use template
 
 training_config:
+  comment: 'new brach feature/learn_feat_disparity, use eye gaze dimension 64,add template loss(non-eye region),eye
+                         loss only without head loss version 3, no vgg loss'  ##comment in log file to describe the experiment
   data_dir: data/xgaze #Directory of the data
   batch_size: 1
   num_workers: 5
@@ -49,7 +51,26 @@ training_config:
   eye_gaze_disentangle: False
   gaze_D6_rotation: False
   resume: ''   ##ckpt file dir to resume training
-  comment: 'new brach feature/learn_feat_disparity, use eye gaze dimension 64,add template loss(non-eye region),eye
-                         loss only without head loss version 3, no vgg loss'  ##comment in log file to describe the experiment
+  gaze_info_mask: eye_mask
+  loss_config:
+    bg_loss: 1.0
+    head_loss: 1.0
+    nonhead_loss: 1.0
+    vgg: 1.0
+    eye_loss: 10
+    template_loss: 0.5
+    image_disp_loss: 1.0
+    lm_disp_loss: 1.0
+    delta_eular: 0.001
+    delta_tvec: 0.001
+    iden_code: 0.001
+    expr_code: 1.0
+    appea_code: 0.001
+    bg_code: 0.01
+    template_loss_mask: non_eye # full_head
+
+
+  
+  
 
 

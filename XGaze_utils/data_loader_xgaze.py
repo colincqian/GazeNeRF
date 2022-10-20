@@ -362,7 +362,7 @@ class GazeDataset_normailzed_from_hdf(Dataset):
             #assert np.max(hdfs_file['face_gaze'][target_index,:]) < 0.1 ,f"face gaze {hdfs_file['face_gaze'][target_index,:]} is too large" #make sure the gaze is close enough to zero
             #self.template_image_index[(subject_idx,cam_index)] = target_index
             template_image = hdfs_file['face_patch'][target_index]
-            
+
             if self.transform is not None:
                 template_image = self.transform(template_image)
             template_image = template_image.astype(np.float32)/255.0

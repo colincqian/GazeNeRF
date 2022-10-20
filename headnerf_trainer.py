@@ -124,6 +124,8 @@ class Trainer(object):
         if self.resume:
             self.load_checkpoint(self.resume)
             
+        self.config = config
+
     def _load_model_parameter(self,check_dict):
         #dealing with extended model when include eye gaze input
         if self.include_eye_gaze:
@@ -138,7 +140,7 @@ class Trainer(object):
                 assert new_weight.size(1) == c + self.eye_gaze_dim
                 check_dict["net"][key] = new_weight
             print(f'Eye gaze feature dimension: {self.eye_gaze_dim}')
-        self.model.load_state_dict(check_dict["net"],strict=False)
+        self.model.load_state_dict(check_dict["net"], strict=False)
 
     def _build_tool_funcs(self):
         self.loss_utils = HeadNeRFLossUtils(device=self.device)
@@ -194,7 +196,7 @@ class Trainer(object):
 
         gaze_info = {
             "input_gaze": face_gaze.repeat(1,self.eye_gaze_dim//face_gaze.size(1)),
-            "eye_mask": data_info['img_mask'] #data_info['eye_mask']
+            "eye_mask": data_info[self.config.gaze_info_mask] #data_info['img_mask']
         }
         return code_info,cam_info,gaze_info
     
@@ -273,7 +275,7 @@ class Trainer(object):
                 ##compute head loss
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=None, opt_code_dict=None, pred_dict=pred_dict, disp_pred_dict=disp_pred_dict,
-                    gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device),eye_mask_tensor=eye_mask.to(self.device)
+                    gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device),eye_mask_tensor=eye_mask.to(self.device),loss_weight=self.config.loss_config
                 )
             
             self.optimizer.zero_grad()
@@ -283,6 +285,7 @@ class Trainer(object):
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
+            
             if self.disentangle:  
                 if "template_eye_loss" in batch_loss_dict:
                     loop_bar.set_description("Opt, Head_loss/Img_disp/Img_temp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["template_eye_loss"].item()) )  
@@ -373,6 +376,10 @@ class Trainer(object):
         gt_img = (img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         res_img = np.concatenate([gt_img, coarse_fg_rgb], axis=1)
 
+        if "template_img" in pred_dict["coarse_dict"]:
+            template_img = pred_dict["coarse_dict"]["template_img"]
+            template_img = (template_img[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+            res_img = np.concatenate([res_img, template_img], axis=1)
         
         log_path = './logs/temp_image/' + 'epoch' + str(self.cur_epoch)
         if not os.path.exists(log_path):

@@ -10,8 +10,8 @@ import math
 
 
 import sys
-sys.path.insert(1, '/home/colinqian/Project/ETH-XGaze/ETH-XGaze')
-from demo import face_gaze_estimiator,draw_gaze
+#sys.path.insert(1, '/home/colinqian/Project/ETH-XGaze/ETH-XGaze')
+#from demo import face_gaze_estimiator,draw_gaze
 
 from Utils.D6_rotation import gaze_to_d6
 

@@ -68,8 +68,8 @@ class HeadNeRFNet_Gaze(nn.Module):
         if self.hier_sampling:
             self.fine_samp_func = FineSample(self.opt)
         
-        self.fg_CD_predictor = MLPforNeRF(vp_channels=vp_channels, vd_channels=vd_channels, 
-                                                    h_channel=self.mlp_h_channel, res_nfeat=self.featmap_nc)
+        # self.fg_CD_predictor = MLPforNeRF(vp_channels=vp_channels, vd_channels=vd_channels, 
+        #                                             h_channel=self.mlp_h_channel, res_nfeat=self.featmap_nc)
 
         if self.hier_sampling:
             self.fine_fg_CD_predictor = MLPforNeRF(vp_channels=vp_channels, vd_channels=vd_channels, 
@@ -84,9 +84,10 @@ class HeadNeRFNet_Gaze(nn.Module):
             gaze_channels = 3+self.eye_gaze_dim+63
         else:
             gaze_channels = 3+self.eye_gaze_dim
-        self.fg_CD_predictor_with_gaze = MLPforHeadNeRF_Gaze(vp_channels=vp_channels,vd_channels=vd_channels,
+
+        self.fg_CD_predictor= MLPforHeadNeRF_Gaze(vp_channels=vp_channels,vd_channels=vd_channels,
                                                     gaze_channels=gaze_channels,h_channel=self.mlp_h_channel,res_nfeat=self.featmap_nc)
-    
+
     def eye_gaze_branch(self,input_gaze,eye_mask_tensor,FGvp_embedder,include_vp = False):
         #coord_map = get_coord_maps(size = self.featmap_size).repeat(batch_size,1,1,1)
         
@@ -123,10 +124,8 @@ class HeadNeRFNet_Gaze(nn.Module):
             FGmlp_FGvp_rgb, FGmlp_FGvp_density = self.fine_fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder)
         else:
             #FGmlp_FGvp_rgb, FGmlp_FGvp_density = self.fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder)#neural radiance field torch.Size([1, 256, 1024, 64]),torch.Size([1, 1, 1024, 64])
-            FGmlp_FGvp_rgb, FGmlp_FGvp_density,FGmlp_rgb_temp,FGmlp_density_temp = self.fg_CD_predictor_with_gaze(ori_FGvp_embedder, ori_FGvd_embedder,Gaze_embedder)
+            FGmlp_FGvp_rgb, FGmlp_FGvp_density,FGmlp_rgb_temp,FGmlp_density_temp = self.fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder,Gaze_embedder)
         
-
-
         ##feature map I_f(256x32x32) is achieved by volumn rendering strategy  
         fg_feat, bg_alpha, batch_ray_depth, ori_batch_weight = self.calc_color_func(fg_vps, FGmlp_FGvp_rgb,
                                                                                     FGmlp_FGvp_density,
@@ -148,16 +147,19 @@ class HeadNeRFNet_Gaze(nn.Module):
         merge_featmap = fg_feat + bg_alpha * bg_featmap  #torch.Size([1, 256, 32, 32])
         merge_img = self.neural_render(merge_featmap) #torch.Size([1, 3, 512, 512])
 
-        #####Template image rendering##########
+        # #####Template image rendering##########
         fg_feat_temp, bg_alpha_temp, batch_ray_depth_temp, ori_batch_weight_temp = self.calc_color_func(fg_vps, FGmlp_rgb_temp,
                                                                             FGmlp_density_temp,
                                                                             FG_zdists,
                                                                             FG_zvals)
         fg_feat_temp = fg_feat_temp.view(batch_size, self.featmap_nc, self.featmap_size, self.featmap_size) #torch.Size([1, 256, 32,32]) 
-        bg_alpha_temp = bg_alpha_temp.view(batch_size, 1, self.featmap_size, self.featmap_size)# torch.Size([1, 1, 32, 32])     
+        bg_alpha_temp = bg_alpha_temp.view(batch_size, 1, self.featmap_size, self.featmap_size)# torch.Size([1, 1, 32, 32])    
+        
+        bg_featmap = self.neural_render.get_bg_featmap() #torch.Size([1, 256, 32, 32])
 
         template_featmap = fg_feat_temp + bg_alpha_temp * bg_featmap  #torch.Size([1, 256, 32, 32])
-        template_img = self.neural_render(template_featmap)                                         
+        template_img = self.neural_render(template_featmap)    
+                                    
         #######################################
 
         res = {
