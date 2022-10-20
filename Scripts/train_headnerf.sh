@@ -1,6 +1,6 @@
-python -m ipdb train_headnerf.py --headnerf_options "TrainedModels/model_Reso32HR.pth" \
+python train_headnerf.py --headnerf_options "TrainedModels/model_Reso32HR.pth" \
                          --batch_size 1 \
-                         --gpu_id 6 \
+                         --gpu_id 0 \
                          --include_eye_gaze False \
                          --eye_gaze_dimension 64 \
                          --eye_gaze_scale_factor 1 \

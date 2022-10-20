@@ -81,7 +81,7 @@ class HeadNeRFNet_Gaze(nn.Module):
         
         #self.gaze_feat_predictor = MLPforGaze(input_channels=1 + self.eye_gaze_dim + 2, h_channel = 256, res_nfeat=self.featmap_nc)
         if self.include_vp:
-            gaze_channels = 3+self.eye_gaze_dim+3
+            gaze_channels = 3+self.eye_gaze_dim+63
         else:
             gaze_channels = 3+self.eye_gaze_dim
         self.fg_CD_predictor_with_gaze = MLPforHeadNeRF_Gaze(vp_channels=vp_channels,vd_channels=vd_channels,

@@ -38,7 +38,6 @@ dataset_config={
     'dataset_path': './XGaze_data/processed_data_10cam',
     'opt': BaseOptions(),
     'keys_to_use':['subject0000'],#,'subject0003','subject0004','subject0005'], 
-    'sub_folder':'train',
     'camera_dir':'./XGaze_data/camera_parameters',
     'transform':None, 
     'is_shuffle':True,
@@ -47,7 +46,6 @@ dataset_config={
     'device': 'cpu',
     'filter_view': False,
     'use_template':True
-
 }
 
 

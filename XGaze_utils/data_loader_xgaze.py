@@ -120,7 +120,7 @@ def get_data_loader(    mode='train',
         print('dataset configure file required!!')
         raise
     torch.manual_seed(0)
-    dataset_config['sub_folder'] = mode #'train' or 'test'
+    # dataset_config['sub_folder'] = mode #'train' or 'test'
     
     #XGaze_dataset = GazeDataset_normailzed(**dataset_config)
     XGaze_dataset = GazeDataset_normailzed_from_hdf(**dataset_config)
@@ -178,7 +178,6 @@ class GazeDataset_normailzed_from_hdf(Dataset):
     def __init__(self, dataset_path: str,
                  opt: BaseOptions,
                  keys_to_use: List[str] = None, 
-                 sub_folder='',
                  camera_dir='',
                  transform=None, 
                  is_shuffle=True,
@@ -190,7 +189,6 @@ class GazeDataset_normailzed_from_hdf(Dataset):
                  use_template = False):
         self.path = dataset_path
         self.hdfs = {}
-        self.sub_folder = sub_folder
         self.is_load_label = is_load_label
         self.camera_loader = Camera_Loader(camera_dir)
         self.device = device
@@ -365,10 +363,6 @@ class GazeDataset_normailzed_from_hdf(Dataset):
             #self.template_image_index[(subject_idx,cam_index)] = target_index
             template_image = hdfs_file['face_patch'][target_index]
             
-            cv2.imshow('image mask', template_image)
-            cv2.waitKey(0) 
-            cv2.destroyAllWindows() 
-
             if self.transform is not None:
                 template_image = self.transform(template_image)
             template_image = template_image.astype(np.float32)/255.0
