@@ -145,7 +145,7 @@ class HeadNeRFLossUtils(object):
         res = {
             "bg_loss": bg_loss,  
             "head_loss": head_loss,  
-            "nonhaed_loss": nonhaed_loss,  
+            "nonhead_loss": nonhaed_loss,  
         }
 
         if self.use_vgg_loss:
@@ -233,7 +233,7 @@ class HeadNeRFLossUtils(object):
             total_loss += loss_dict['eye_loss'] * loss_weight['eye_loss']
            
         #template loss
-        if eye_mask_tensor is not None:
+        if eye_mask_tensor is not None and "template_img" in coarse_data_dict:
             #template loss for the non_eye region
             template_loss_mask = noneye_mask if loss_weight["template_loss_mask"] == 'non_eye' else head_mask
             n_template_loss_mask = torch.bitwise_not(template_loss_mask)

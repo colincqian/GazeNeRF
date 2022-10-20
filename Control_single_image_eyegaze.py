@@ -55,6 +55,7 @@ def gaze_feat_tensor(gaze_dim,scale_factor,base_gaze_value):
 class FittingImage(object):
     
     def __init__(self, model_path, save_root, gpu_id, 
+                    config,
                     include_eye_gaze = True,
                     eye_gaze_dim = 16,
                     gaze_scale_factor = 1,
@@ -84,6 +85,7 @@ class FittingImage(object):
                                 'ave_e_h2':[],
                                 'ave_e_v2':[],
         }
+        self.config = config
         self.build_info()
         self.build_tool_funcs()
 
@@ -371,7 +373,7 @@ class FittingImage(object):
                 
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=delta_cam_info, opt_code_dict=opt_code_dict, pred_dict=pred_dict, disp_pred_dict=None,
-                    gt_rgb=self.img_tensor, mask_tensor=self.mask_tensor
+                    gt_rgb=self.img_tensor, mask_tensor=self.mask_tensor,loss_weight=self.config.loss_config
                 )
 
             optimizer.zero_grad()
@@ -742,6 +744,8 @@ if __name__ == "__main__":
     parser.add_argument("--vis_gaze_vect", type=str2bool, required=True,help='whether to visualize the gaze vector in result images')
     parser.add_argument("--D6_rotation", type=str2bool, default=False,help='whether to use 6D representation for eye gaze')
     parser.add_argument("--model_name", type=str, default='HeadNeRF',help='choose the model for Head rendering')
+
+    parser.add_argument("--config_file_path", type=str,help='Path to load config file')
     args = parser.parse_args()
 
 
@@ -755,7 +759,10 @@ if __name__ == "__main__":
     vis_vect = args.vis_gaze_vect
     use_6D_rotattion = args.D6_rotation
     model_name = args.model_name
-    
+    config_path = args.config_file_path
+
+    from train_headnerf import load_config
+    train_config = load_config(config_path)["training_config"]
     #####
     subject_included = ['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
     #subject_included = ['subject0009','subject0010','subject0013']
@@ -773,13 +780,13 @@ if __name__ == "__main__":
         
     #     assert os.path.exists(target_embedding_path)
     
-    tt = FittingImage(model_path, save_root, gpu_id=0,include_eye_gaze=True,eye_gaze_dim=gaze_feat_dim,gaze_scale_factor=scale_factor,vis_vect=vis_vect,D6_rotation=use_6D_rotattion,model_name=model_name)
+    tt = FittingImage(model_path, save_root, gpu_id=0,config=train_config,include_eye_gaze=True,eye_gaze_dim=gaze_feat_dim,gaze_scale_factor=scale_factor,vis_vect=vis_vect,D6_rotation=use_6D_rotattion,model_name=model_name)
     # # #tt.fitting_single_images(hdf_file,image_index, save_root)
 
     # for image_index in range(50):
     #     tt.render_face_gaze_and_ground_truth_image(hdf_file,image_index,save_root='experiment_document/gaze_and_gt_image/')
 
-    #tt.gridsample_face_gaze(hdf_file,image_index,save_root='experiment_document/gridsample_images/',resolution=20) #grid sample gaze space
+    tt.gridsample_face_gaze(hdf_file,image_index,save_root='experiment_document/gridsample_images/',resolution=20) #grid sample gaze space
 
     #tt.sample_face_gaze_ground_truth_image(hdf_file,image_sample_num=400,resolution=21) ##sample gt images and bilinear interpolate
 
@@ -814,6 +821,6 @@ if __name__ == "__main__":
 
 
     #evaluate subjects
-    tt.evaluation_subject(input_dir='XGaze_data/processed_data_10cam_test',\
-                            subjects_name='processed_test_subject0000',\
-                                save_root='experiment_document/evaluation_output/eval_subject000',print_freq=1)
+    # tt.evaluation_subject(input_dir='XGaze_data/processed_data_10cam_test',\
+    #                         subjects_name='processed_test_subject0000',\
+    #                             save_root='experiment_document/evaluation_output/eval_subject000',print_freq=1)

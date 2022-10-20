@@ -109,7 +109,7 @@ class HeadNeRFNet_Gaze(nn.Module):
         return Gaze_feat # (batch_size,feat_dim,map_pixel,point_num)
         
     def calc_color_with_code(self, fg_vps, shape_code, appea_code, FGvp_embedder, 
-                             FGvd_embedder, FG_zdists, FG_zvals, fine_level,input_gaze,eye_mask_tensor):
+                             FGvd_embedder, FG_zdists, FG_zvals, fine_level,input_gaze,eye_mask_tensor,for_train):
         
         ori_FGvp_embedder = torch.cat([FGvp_embedder, shape_code], dim=1) #torch.Size([1, 242, 1024, 64]) position encoder and id+exp
         Gaze_embedder = self.eye_gaze_branch(input_gaze,eye_mask_tensor,FGvp_embedder,include_vp=self.include_vp)
@@ -124,7 +124,7 @@ class HeadNeRFNet_Gaze(nn.Module):
             FGmlp_FGvp_rgb, FGmlp_FGvp_density = self.fine_fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder)
         else:
             #FGmlp_FGvp_rgb, FGmlp_FGvp_density = self.fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder)#neural radiance field torch.Size([1, 256, 1024, 64]),torch.Size([1, 1, 1024, 64])
-            FGmlp_FGvp_rgb, FGmlp_FGvp_density,FGmlp_rgb_temp,FGmlp_density_temp = self.fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder,Gaze_embedder)
+            FGmlp_FGvp_rgb, FGmlp_FGvp_density,FGmlp_rgb_temp,FGmlp_density_temp = self.fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder,Gaze_embedder,for_train=for_train)
         
         ##feature map I_f(256x32x32) is achieved by volumn rendering strategy  
         fg_feat, bg_alpha, batch_ray_depth, ori_batch_weight = self.calc_color_func(fg_vps, FGmlp_FGvp_rgb,
@@ -147,26 +147,26 @@ class HeadNeRFNet_Gaze(nn.Module):
         merge_featmap = fg_feat + bg_alpha * bg_featmap  #torch.Size([1, 256, 32, 32])
         merge_img = self.neural_render(merge_featmap) #torch.Size([1, 3, 512, 512])
 
-        # #####Template image rendering##########
-        fg_feat_temp, bg_alpha_temp, batch_ray_depth_temp, ori_batch_weight_temp = self.calc_color_func(fg_vps, FGmlp_rgb_temp,
-                                                                            FGmlp_density_temp,
-                                                                            FG_zdists,
-                                                                            FG_zvals)
-        fg_feat_temp = fg_feat_temp.view(batch_size, self.featmap_nc, self.featmap_size, self.featmap_size) #torch.Size([1, 256, 32,32]) 
-        bg_alpha_temp = bg_alpha_temp.view(batch_size, 1, self.featmap_size, self.featmap_size)# torch.Size([1, 1, 32, 32])    
-        
-        bg_featmap = self.neural_render.get_bg_featmap() #torch.Size([1, 256, 32, 32])
-
-        template_featmap = fg_feat_temp + bg_alpha_temp * bg_featmap  #torch.Size([1, 256, 32, 32])
-        template_img = self.neural_render(template_featmap)    
-                                    
-        #######################################
-
         res = {
             "merge_img": merge_img, 
             "bg_img": bg_img,
-            "template_img":template_img
         }
+        # #####Template image rendering##########
+        if for_train:
+            fg_feat_temp, bg_alpha_temp, batch_ray_depth_temp, ori_batch_weight_temp = self.calc_color_func(fg_vps, FGmlp_rgb_temp,
+                                                                                FGmlp_density_temp,
+                                                                                FG_zdists,
+                                                                                FG_zvals)
+            fg_feat_temp = fg_feat_temp.view(batch_size, self.featmap_nc, self.featmap_size, self.featmap_size) #torch.Size([1, 256, 32,32]) 
+            bg_alpha_temp = bg_alpha_temp.view(batch_size, 1, self.featmap_size, self.featmap_size)# torch.Size([1, 1, 32, 32])    
+            
+            bg_featmap = self.neural_render.get_bg_featmap() #torch.Size([1, 256, 32, 32])
+
+            template_featmap = fg_feat_temp + bg_alpha_temp * bg_featmap  #torch.Size([1, 256, 32, 32])
+            template_img = self.neural_render(template_featmap) 
+               
+            res["template_img"] = template_img
+        #######################################
         
         return res, ori_batch_weight
 
@@ -204,7 +204,8 @@ class HeadNeRFNet_Gaze(nn.Module):
         input_gaze = kwargs["input_gaze"].cuda()
         eye_mask_tensor = kwargs["eye_mask"].cuda()
         c_ori_res, batch_weight = self.calc_color_with_code(
-            fg_vps, cur_shape_code, cur_appea_code, FGvp_embedder, FGvd_embedder, FG_zdists, FG_zvals, fine_level = False, input_gaze=input_gaze, eye_mask_tensor=eye_mask_tensor
+            fg_vps, cur_shape_code, cur_appea_code, FGvp_embedder, FGvd_embedder, FG_zdists, FG_zvals, fine_level = False,
+             input_gaze=input_gaze, eye_mask_tensor=eye_mask_tensor,for_train=for_train
         )
         
         res_dict = {

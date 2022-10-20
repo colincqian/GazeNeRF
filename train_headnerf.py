@@ -36,14 +36,18 @@ def parse_argument():
 def load_config(config_file):
     with open(config_file,'r') as f:
         print(f'----Load Configuration from {config_file}----')
-        data = yaml.load(f,Loader=yaml.FullLoader)
-    return data
+        config = yaml.load(f,Loader=yaml.FullLoader)
 
-def run(config):
+    config_dic = {
+        "training_config":Dict2Class(config['training_config']),
+        "base_opt": config['base_opt'],
+        "dataset_config": config['dataset_config']
+        }
+
+    return config_dic
+
+def run(training_config,dataset_config,base_opt):
     kwargs = {}
-    training_config = Dict2Class(config['training_config'])
-    base_opt = config['base_opt']
-    dataset_config = config['dataset_config']
 
     if training_config.headnerf_options:
         check_dict = torch.load(training_config.headnerf_options, map_location=torch.device("cpu"))
@@ -89,4 +93,4 @@ if __name__ == '__main__':
     torch.manual_seed(0)
     args = parse_argument()
     config = load_config(args.config_file)
-    run(config)
+    run(**config)
