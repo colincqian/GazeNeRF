@@ -27,6 +27,10 @@ import cv2
 from Utils.Log_utils import log
 from Utils.D6_rotation import gaze_to_d6
 
+model_list = {
+    'HeadNeRF':HeadNeRFNet,
+    'HeadNeRF_Gaze':HeadNeRFNet_Gaze
+}
 
 class Trainer(object):
     def __init__(self,config,data_loader):
@@ -92,12 +96,12 @@ class Trainer(object):
             para_dict = check_dict["para"]
             self.opt = BaseOptions(para_dict)
 
-            self.model = HeadNeRFNet_Gaze(self.opt, include_vd=False, hier_sampling=False,eye_gaze_dim=self.eye_gaze_dim)  
+            self.model = model_list[config.model_name](self.opt, include_vd=False, hier_sampling=False,eye_gaze_dim=self.eye_gaze_dim)  
             self._load_model_parameter(check_dict)
             print(f'load model parameter from {self.headnerf_options},set include_eye gaze to be {self.include_eye_gaze}')
         else:
             self.opt = BaseOptions()
-            self.model = HeadNeRFNet_Gaze(self.opt, include_vd=False, hier_sampling=False,eye_gaze_dim=self.eye_gaze_dim)   
+            self.model = model_list[config.model_name](self.opt, include_vd=False, hier_sampling=False,eye_gaze_dim=self.eye_gaze_dim)   
             print(f'Train model from scratch, set include_eye gaze to be {self.include_eye_gaze}')     
         
         ##device setting
@@ -423,5 +427,7 @@ if __name__ == '__main__':
     import ipdb
     ipdb.set_trace()
     model.load_state_dict(check_dict["net"])
+
+
 
 
