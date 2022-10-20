@@ -244,7 +244,7 @@ class HeadNeRFLossUtils(object):
             #template loss for the non_eye region
             loss_dict_eye = self.calc_data_loss(coarse_data_dict, gt_rgb,noneye_mask,head_mask,use_template=True)
             loss_dict['template_loss'] = loss_dict_eye['head_loss'] 
-            total_loss += loss_dict['template_loss'] 
+            total_loss += loss_dict['template_loss'] * 0.5
         
         if disp_pred_dict is not None and eye_mask_tensor is not None:
             loss_dict.update(self.calc_disp_loss(pred_dict["coarse_dict"],disp_pred_dict["coarse_dict"],non_eye_mask_tensor=noneye_mask))
