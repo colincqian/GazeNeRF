@@ -152,15 +152,6 @@ class MLPforHeadNeRF_Gaze(nn.Module):
             if i in self.skips:
                 x = torch.cat([batch_embed_vps, x], dim=1)
         
-        ####current prediction
-        density = self._modules["density_module"](x + density_feat)
-        density = F.relu(density)
-        x = self._modules["RGB_layer_0"](x)
-        x = self._modules["RGB_layer_1"](torch.cat([x, batch_embed_vds], dim = 1))
-        x = F.relu(x)
-        rgb = self._modules["RGB_layer_2"](x + rgb_feat)
-        if self.res_nfeat == 3:
-            rgb = torch.sigmoid(rgb)
 
         if for_train:
             temp_x = x.clone()
@@ -174,12 +165,19 @@ class MLPforHeadNeRF_Gaze(nn.Module):
             rgb_temp = self._modules["RGB_layer_2"](temp_x)
             if self.res_nfeat == 3:
                 rgb_temp = torch.sigmoid(rgb_temp)
-        else:
-            rgb_temp = rgb
-            density_temp = density
+
+        ####current prediction
+        density = self._modules["density_module"](x + density_feat)
+        density = F.relu(density)
+        x = self._modules["RGB_layer_0"](x)
+        x = self._modules["RGB_layer_1"](torch.cat([x, batch_embed_vds], dim = 1))
+        x = F.relu(x)
+        rgb = self._modules["RGB_layer_2"](x + rgb_feat)
+        if self.res_nfeat == 3:
+            rgb = torch.sigmoid(rgb)
 
     
-        return rgb, density, rgb_temp, density_temp
+        return (rgb, density, rgb_temp, density_temp) if for_train else (rgb,density,rgb,density)
 
 
 class MLPforGaze(nn.Module):

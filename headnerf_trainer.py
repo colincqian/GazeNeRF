@@ -274,12 +274,13 @@ class Trainer(object):
                 else:
                     disp_pred_dict = None
 
-                gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
-
+                gt_label = {"gt_rgb" : data_info['img'].squeeze(1).to(self.device), "template_img_gt" : data_info['template_img'].squeeze(1).to(self.device)}
+                mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
+                
                 ##compute head loss
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=None, opt_code_dict=None, pred_dict=pred_dict, disp_pred_dict=disp_pred_dict,
-                    gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device),eye_mask_tensor=eye_mask.to(self.device),loss_weight=self.config.loss_config
+                    gt_rgb=gt_label, mask_tensor=mask_img.to(self.device),eye_mask_tensor=eye_mask.to(self.device),loss_weight=self.config.loss_config
                 )
             
             self.optimizer.zero_grad()
@@ -296,7 +297,7 @@ class Trainer(object):
                 else:
                     loop_bar.set_description("Opt, Head_loss/Img_disp/Lm_disp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["lm_disp_loss"].item()) )  
             else:
-                loop_bar.set_description("Opt, Head_loss/Template_loss/eye_loss: %.6f / %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["template_loss"].item(),batch_loss_dict["eye_loss"].item()) )  
+                loop_bar.set_description("Opt, Head_loss/Temp_loss/Temp_eye_loss: %.6f / %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["template_loss"].item(),batch_loss_dict["template_eye_loss"].item()) )  
 
 
                 
