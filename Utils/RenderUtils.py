@@ -8,10 +8,12 @@ import cv2
 import math
 
 
-
-import sys
-sys.path.insert(1, '/home/colinqian/Project/ETH-XGaze/ETH-XGaze')
-from demo import face_gaze_estimiator,draw_gaze
+try:
+    import sys
+    sys.path.insert(1, '/home/colinqian/Project/ETH-XGaze/ETH-XGaze')
+    from demo import face_gaze_estimiator,draw_gaze
+except:
+    print('cannot load face gaze estimator!! Dont do evalutaion based on estimator')
 
 from Utils.D6_rotation import gaze_to_d6
 
