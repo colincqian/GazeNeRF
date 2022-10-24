@@ -88,9 +88,11 @@ class HeadNeRFNet_Gaze(nn.Module):
         self.fg_CD_predictor= MLPforHeadNeRF_Gaze(vp_channels=vp_channels,vd_channels=vd_channels,
                                                     gaze_channels=gaze_channels,h_channel=self.mlp_h_channel,res_nfeat=self.featmap_nc)
 
-    def eye_gaze_branch(self,input_gaze,eye_mask_tensor,FGvp_embedder,include_vp = False):
+    def eye_gaze_branch(self,input_gaze,eye_mask_tensor,FGvp_embedder,include_vp = False,use_temp=False):
         #coord_map = get_coord_maps(size = self.featmap_size).repeat(batch_size,1,1,1)
-        
+        if use_temp:
+            input_gaze = torch.zeros_like(input_gaze)
+
         batch_size = eye_mask_tensor.size(0)
         img_size = eye_mask_tensor.size(-1)
         
@@ -114,6 +116,11 @@ class HeadNeRFNet_Gaze(nn.Module):
         ori_FGvp_embedder = torch.cat([FGvp_embedder, shape_code], dim=1) #torch.Size([1, 242, 1024, 64]) position encoder and id+exp
         Gaze_embedder = self.eye_gaze_branch(input_gaze,eye_mask_tensor,FGvp_embedder,include_vp=self.include_vp)
 
+        if for_train:
+            Temp_Gaze_embedder = self.eye_gaze_branch(input_gaze,eye_mask_tensor,FGvp_embedder,include_vp=self.include_vp,use_temp=True)
+        else:
+            Temp_Gaze_embedder = None
+
         if self.include_vd:
             ori_FGvd_embedder = torch.cat([FGvd_embedder, appea_code], dim=1)
         else:
@@ -124,7 +131,7 @@ class HeadNeRFNet_Gaze(nn.Module):
             FGmlp_FGvp_rgb, FGmlp_FGvp_density = self.fine_fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder)
         else:
             #FGmlp_FGvp_rgb, FGmlp_FGvp_density = self.fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder)#neural radiance field torch.Size([1, 256, 1024, 64]),torch.Size([1, 1, 1024, 64])
-            FGmlp_FGvp_rgb, FGmlp_FGvp_density,FGmlp_rgb_temp,FGmlp_density_temp = self.fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder,Gaze_embedder,for_train=for_train)
+            FGmlp_FGvp_rgb, FGmlp_FGvp_density,FGmlp_rgb_temp,FGmlp_density_temp = self.fg_CD_predictor(ori_FGvp_embedder, ori_FGvd_embedder,Gaze_embedder,Temp_Gaze_embedder,for_train=for_train)
         
         ##feature map I_f(256x32x32) is achieved by volumn rendering strategy  
         fg_feat, bg_alpha, batch_ray_depth, ori_batch_weight = self.calc_color_func(fg_vps, FGmlp_FGvp_rgb,
