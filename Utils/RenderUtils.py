@@ -170,7 +170,6 @@ class RenderUtils(object):
 
         if "input_gaze" in code_info:
             code_info["input_gaze"] = face_gaze_feat.float()
-            print(code_info["input_gaze"])
         else:
             shape_code[0,-gaze_dim:]= face_gaze_feat
             code_info = {

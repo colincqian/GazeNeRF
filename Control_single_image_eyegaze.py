@@ -568,6 +568,7 @@ class FittingImage(object):
         'SSIM':[0]*sample_size,
         'PSNR':[0]*sample_size,
         'LPIPS':[0]*sample_size,
+        'L1_loss':[0]*sample_size,
         'vertical_error':[0]*sample_size,
         'horizontal_error':[0]*sample_size,
         'vertical_error_ref':[0]*sample_size,
@@ -591,7 +592,15 @@ class FittingImage(object):
             gt_img = (self.img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
             gt_img = cv2.cvtColor(gt_img, cv2.COLOR_BGR2RGB)
 
-            eval_metrics = calc_eval_metrics(rendered_results.copy(),gt_img.copy(),vis=False)
+            eval_metrics = calc_eval_metrics(rendered_results.copy(),gt_img.copy(),vis=False,L1_loss=True)
+            
+            #visualiza difference map
+            difference = cv2.subtract(gt_img,rendered_results)
+            Conv_hsv_Gray = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
+            ret, mask = cv2.threshold(Conv_hsv_Gray, 0, 255,cv2.THRESH_BINARY_INV|cv2.THRESH_OTSU)
+            difference[mask != 255] = [0, 0, 255]
+            diff_rendered = rendered_results.copy()
+            diff_rendered[mask != 255] = [0, 0, 255]
 
             if self.vis_vect:
                 rendered_results,e_v2,e_h2 = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
@@ -609,13 +618,12 @@ class FittingImage(object):
                 output_dict['horizontal_error_ref'][count] = e_h1
 
                         ## compute gaze gap between label and estimated
-            output_dict['SSIM'][count] = eval_metrics['SSIM']
-            output_dict['PSNR'][count] = eval_metrics['PSNR']
-            output_dict['LPIPS'][count] = eval_metrics['LPIPS']
+            for k,v in eval_metrics.items():
+                output_dict[k][count] = v
             count += 1
 
             if count % print_freq == 0:
-                res_img = np.concatenate([gt_img, rendered_results], axis=1)
+                res_img = np.concatenate([gt_img, rendered_results,difference,diff_rendered], axis=1)
                 cv2.imwrite(os.path.join(save_root,f'testing_image{count}.png'),res_img)
             
         output_dict['sample_size'] = count
@@ -786,7 +794,7 @@ if __name__ == "__main__":
     # for image_index in range(50):
     #     tt.render_face_gaze_and_ground_truth_image(hdf_file,image_index,save_root='experiment_document/gaze_and_gt_image/')
 
-    tt.gridsample_face_gaze(hdf_file,image_index,save_root='experiment_document/gridsample_images/',resolution=20) #grid sample gaze space
+    #tt.gridsample_face_gaze(hdf_file,image_index,save_root='experiment_document/gridsample_images/',resolution=20,print_freq=1) #grid sample gaze space
 
     #tt.sample_face_gaze_ground_truth_image(hdf_file,image_sample_num=400,resolution=21) ##sample gt images and bilinear interpolate
 
@@ -821,6 +829,6 @@ if __name__ == "__main__":
 
 
     #evaluate subjects
-    # tt.evaluation_subject(input_dir='XGaze_data/processed_data_10cam_test',\
-    #                         subjects_name='processed_test_subject0000',\
-    #                             save_root='experiment_document/evaluation_output/eval_subject000',print_freq=1)
+    tt.evaluation_subject(input_dir='XGaze_data/processed_data_10cam',\
+                            subjects_name='processed_test_subject0000',\
+                                save_root='experiment_document/evaluation_output/eval_subject000',print_freq=1)

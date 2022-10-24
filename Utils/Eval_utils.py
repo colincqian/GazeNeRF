@@ -8,7 +8,7 @@ import torch
 
 from ignite.metrics import SSIM
 
-def calc_eval_metrics(pred_image, label_image, eye_mask_tensor=None,vis=False):
+def calc_eval_metrics(pred_image, label_image, eye_mask_tensor=None,vis=False,L1_loss=False):
     # head_mask = (mask_tensor >= 0.5)  
     # nonhead_mask = (mask_tensor < 0.5)  
 
@@ -38,6 +38,8 @@ def calc_eval_metrics(pred_image, label_image, eye_mask_tensor=None,vis=False):
         'PSNR':compute_PSNR_score(image1,image2),
         'LPIPS':compute_LPIPS(image1,image2)
     }
+    if L1_loss:
+        metrics_dict['L1_loss'] = compute_L1_score(image1,image2)
     return metrics_dict
 
 
