@@ -299,7 +299,7 @@ class FittingImage(object):
             code_info.update(
                 {
                     "input_gaze": self.base_gaze.float().to(self.device),
-                    "eye_mask" : self.mask_tensor.float().to(self.device)
+                    "eye_mask" : self.eye_mask_tensor.float().to(self.device)
                 }
 
             )
@@ -897,7 +897,7 @@ if __name__ == "__main__":
     # tt.evaluation_subject(input_dir='XGaze_data/processed_data_10cam',\
     #                         subjects_name='processed_test_subject0000',\
     #                             save_root='experiment_document/evaluation_output/eval_subject000',print_freq=1)
-
+    subject_included = ['subject0000'] 
     tt.full_evaluation(dataset_dir='XGaze_data/processed_data_10cam',\
                         subjects_included=subject_included,\
-                        save_root='experiment_document/evaluation_output/full_evaluation',sample_size=30,print_freq=1)
+                        save_root='experiment_document/evaluation_output/full_evaluation',sample_size=200,print_freq=10)

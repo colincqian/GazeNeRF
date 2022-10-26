@@ -829,6 +829,6 @@ if __name__ == "__main__":
 
 
     #evaluate subjects
-    tt.evaluation_subject(input_dir='XGaze_data/processed_data_10cam',\
-                            subjects_name='processed_test_subject0000',\
-                                save_root='experiment_document/evaluation_output/eval_subject000',print_freq=1)
+    # tt.evaluation_subject(input_dir='XGaze_data/processed_data_10cam',\
+    #                         subjects_name='processed_test_subject0000',\
+    #                             save_root='experiment_document/evaluation_output/eval_subject000',print_freq=1)
