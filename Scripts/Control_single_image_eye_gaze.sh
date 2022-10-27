@@ -6,6 +6,6 @@ python Evaluation.py --model_path 'TrainedModels/anchor_template_disp_version/ep
                                        --eye_gaze_scale_factor 1 \
                                        --vis_gaze_vect True \
                                        --D6_rotation False  \
-                                       --model_name 'HeadNeRF' \
+                                       --model_name 'HeadNeRF_Gaze' \
                                        --config_file_path 'config/train.yml'
                             

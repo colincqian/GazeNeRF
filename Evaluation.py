@@ -30,6 +30,7 @@ import shutil
 from Utils.Eval_utils import calc_eval_metrics
 import pickle
 from prettytable import PrettyTable
+from train_headnerf import load_config
 
 #define eye gaze base
 UPPER_RIGHT = torch.tensor([0.25,-0.5])
@@ -361,7 +362,7 @@ class FittingImage(object):
         gt_img = (self.img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         
         
-        loop_bar = tqdm(range(iter_num), leave=True)
+        loop_bar = tqdm(range(iter_num),position=0)
         for iter_ in loop_bar:
             with torch.set_grad_enabled(True):
                 code_info, opt_code_dict, cam_info, delta_cam_info = self.build_code_and_cam()
@@ -481,8 +482,7 @@ class FittingImage(object):
         e_v_map = np.zeros((resolution,resolution))
         e_h_map = np.zeros((resolution,resolution))
 
-        loop_bar1 = tqdm(enumerate(np.linspace(1,-1,resolution,endpoint=True)), leave=True)
-        
+        loop_bar1 = tqdm(enumerate(np.linspace(1,-1,resolution,endpoint=True)),leave=True, position = 0, desc=" row loop")
 
         if os.path.exists(save_root):
             shutil.rmtree(save_root)
@@ -511,7 +511,7 @@ class FittingImage(object):
         np.save(os.path.join(save_root,'horizontal_error_map.npy'),e_h_map)
         np.save(os.path.join(save_root,'total_error_map.npy'),e_total_map)
         
-    def sample_face_gaze_ground_truth_image(self,hdf_file_path,image_sample_num,resolution=21,mirror=False):
+    def sample_face_gaze_ground_truth_image(self,hdf_file_path,image_sample_num,resolution=21,cam_index=0):
         '''
         sample ground truth label and compute error (gap between estimator and input gaze)
         and draw the error distribution over gaze space
@@ -525,7 +525,7 @@ class FittingImage(object):
         yaw_list=[]
 
         for image_index in range(image_sample_num):
-            self.load_data(hdf_file_path,image_index)
+            self.load_data(hdf_file_path,image_index,cam_idx=cam_index)
             self.perform_fitting()
 
             inmat_np = torch.linalg.inv(self.res_cam_info['batch_inv_inmats']).detach().cpu().numpy()
@@ -602,9 +602,11 @@ class FittingImage(object):
                 mean_value = np.sum(v)/total_count
                 t.add_row([k,mean_value])
         t.add_row(['sample_size',total_count])
+    
         print(t)
 
         with open(os.path.join(save_root,'error_table.txt'), 'w') as w:
+            w.write(f'Model_name: {self.model_path}\n')
             w.write(str(t))
         
 
@@ -637,7 +639,7 @@ class FittingImage(object):
             loop_bar = indexs
 
 
-        for image_index in tqdm(loop_bar):
+        for image_index in tqdm(loop_bar,leave=True,position=2):
             self.load_data(hdf_file_path,image_index,cam_idx=-1) ##inlcude all camera views
             self.perform_fitting()
 
@@ -805,79 +807,53 @@ if __name__ == "__main__":
     # torch.backends.cudnn.allow_tf32 = False
 
     parser = argparse.ArgumentParser(description='a framework for fitting a single image using HeadNeRF')
-    parser.add_argument("--model_path", type=str, required=True)
-    
-    parser.add_argument("--hdf_file", type=str, required=True)
-    parser.add_argument("--image_index", type=int, required=True)
-    parser.add_argument("--gaze_dim", type=int, required=True)
-
-    parser.add_argument("--save_root", type=str, required=True)
-
-    parser.add_argument("--eye_gaze_scale_factor", type=int, default=1)
-    parser.add_argument("--vis_gaze_vect", type=str2bool, required=True,help='whether to visualize the gaze vector in result images')
-    parser.add_argument("--D6_rotation", type=str2bool, default=False,help='whether to use 6D representation for eye gaze')
-    parser.add_argument("--model_name", type=str, default='HeadNeRF',help='choose the model for Head rendering')
-
     parser.add_argument("--config_file_path", type=str,help='Path to load config file')
     args = parser.parse_args()
 
-
-    model_path = args.model_path
-    save_root = args.save_root
-    
-    hdf_file = args.hdf_file
-    image_index = args.image_index
-    gaze_feat_dim = args.gaze_dim
-    scale_factor = args.eye_gaze_scale_factor
-    vis_vect = args.vis_gaze_vect
-    use_6D_rotattion = args.D6_rotation
-    model_name = args.model_name
-    config_path = args.config_file_path
-
-    from train_headnerf import load_config
-    train_config = load_config(config_path)["training_config"]
+    config_path = args.config_file_path    
+    config = load_config(config_path)
+    train_config = config["training_config"]
+    eval_config = config["eval_config"]
     #####
-    subject_included = ['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
-    #subject_included = ['subject0009','subject0010','subject0013']
-    cam_included = [0,1,2,3,4,5,6,7,8,9]
+    model_path = eval_config.model_path
+    save_root = eval_config.save_root
+    hdf_file = eval_config.hdf_file
+    image_index = eval_config.image_index
+    gaze_feat_dim = eval_config.gaze_dim
+    scale_factor = eval_config.eye_gaze_scale_factor
+    vis_vect = eval_config.vis_gaze_vect
+    use_6D_rotattion = eval_config.D6_rotation
+    model_name = eval_config.model_name
+    subject_included = eval_config.subject_included
+    cam_included = eval_config.cam_included
+
     #####
-    # if len(args.target_embedding) == 0:
-    #     target_embedding_path = None
-    # else:
-    #     target_embedding_path = args.target_embedding
-    
-    #     temp_str_list = target_embedding_path.split("/")
-    #     if temp_str_list[1] == "*":
-    #         temp_str_list[1] = os.path.basename(model_path)[:-4]
-    #         target_embedding_path = os.path.join(*temp_str_list)
-        
-    #     assert os.path.exists(target_embedding_path)
-    
     tt = FittingImage(model_path, save_root, gpu_id=0,config=train_config,include_eye_gaze=True,eye_gaze_dim=gaze_feat_dim,gaze_scale_factor=scale_factor,vis_vect=vis_vect,D6_rotation=use_6D_rotattion,model_name=model_name)
     # # #tt.fitting_single_images(hdf_file,image_index, save_root)
 
     # for image_index in range(50):
     #     tt.render_face_gaze_and_ground_truth_image(hdf_file,image_index,save_root='experiment_document/gaze_and_gt_image/')
+    if eval_config.mode == 'gridsample_face_gaze':
+        if eval_config.choice == 'multi_cam':
+            subject = subject_included[0]
+            hdf_file = os.path.join(hdf_file,f'processed_{subject}')
+            for cam_id in cam_included:
+                subfolder = f'gridsample_images/cam{cam_id}'
+                tt.gridsample_face_gaze(hdf_file,image_index,save_root=os.path.join(save_root,subfolder),resolution=eval_config.resolution,\
+                                        print_freq=eval_config.print_freq,\
+                                        cam_index=cam_id) #grid sample gaze space
+        elif eval_config.choice == 'multi_sub':
+            cam_id = cam_included[0]
+            for subject_id in subject_included:
+                hdf_file = os.path.join(hdf_file,f'processed_{subject_id}')
+                subfolder = f'gridsample_images/{subject_id}'
+                tt.gridsample_face_gaze(hdf_file,image_index,save_root=os.path.join(save_root,subfolder),resolution=eval_config.resolution,\
+                                        print_freq=eval_config.print_freq,\
+                                        cam_index=cam_id) #grid sample gaze space
 
-    #tt.gridsample_face_gaze(hdf_file,image_index,save_root='experiment_document/gridsample_images/',resolution=20,print_freq=1) #grid sample gaze space
-
-    #tt.sample_face_gaze_ground_truth_image(hdf_file,image_sample_num=400,resolution=21) ##sample gt images and bilinear interpolate
-
-    # same subjects for 10 cams
-    # for cam_id in cam_included:
-    #     print(f'Sampling {cam_id} !')
-    #     save_root = os.path.join('experiment_document/gridsample_images/',str(cam_id))
-    #     tt.gridsample_face_gaze(hdf_file,image_index,save_root=save_root,resolution=21,print_freq=10,cam_index=cam_id)
+    if eval_config.mode == 'gridsample_ground_truth_gaze':
+        tt.sample_face_gaze_ground_truth_image(hdf_file,image_sample_num=eval_config.sample_size,resolution=eval_config.resolution) ##sample gt images and bilinear interpolate
         
-    # same cam setting for 10 subjects
-    # for subject_id in subject_included:
-    #     print(f'Sampling {subject_id} !')
-    #     hdf_file = 'XGaze_data/processed_data/processed_' + subject_id
-    #     save_root = os.path.join('experiment_document/gridsample_images_learning_disparity/',subject_id)
-    #     tt.gridsample_face_gaze(hdf_file,image_index,save_root=save_root,resolution=21,print_freq=10)
-        
-
-
     ## 10 cam for 10 subject
     # for subject_id in subject_included:
     #     print(f'Sampling {subject_id} !')
@@ -891,13 +867,8 @@ if __name__ == "__main__":
     #         except:
     #             pass
 
-
-
-    #evaluate subjects
-    # tt.evaluation_subject(input_dir='XGaze_data/processed_data_10cam',\
-    #                         subjects_name='processed_test_subject0000',\
-    #                             save_root='experiment_document/evaluation_output/eval_subject000',print_freq=1)
-    subject_included = ['subject0000'] 
-    tt.full_evaluation(dataset_dir='XGaze_data/processed_data_10cam',\
-                        subjects_included=subject_included,\
-                        save_root='experiment_document/evaluation_output/full_evaluation',sample_size=200,print_freq=10)
+    if eval_config.mode == 'full_evaluation':
+        sub_folder = 'evaluation_output/full_evaluation'
+        tt.full_evaluation(dataset_dir=hdf_file,\
+                            subjects_included=subject_included,\
+                            save_root=os.path.join(save_root,sub_folder),sample_size=eval_config.sample_size,print_freq=eval_config.print_freq)

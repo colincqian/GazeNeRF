@@ -136,3 +136,5 @@ XGaze_dataset/xgaze
 logs
 temp_res
 
+Utils/Gaze_estimator/models
+Utils/Gaze_estimator/modules

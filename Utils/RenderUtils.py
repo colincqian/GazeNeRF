@@ -7,15 +7,16 @@ import numpy as np
 import cv2
 import math
 
+from Utils.Gaze_estimator.Gaze_estimation import face_gaze_estimiator,draw_gaze
 
-try:
-    import sys
-    sys.path.insert(1, '/home/colinqian/Project/ETH-XGaze/ETH-XGaze')
-    from demo import face_gaze_estimiator,draw_gaze
-except:
-    print('cannot load face gaze estimator!! Dont do evalutaion based on estimator')
+# try:
+#     import sys
+#     sys.path.insert(1, '/home/colinqian/Project/ETH-XGaze/ETH-XGaze')
+#     from Utils.Gaze_estimator.Gaze_estimation import face_gaze_estimiator,draw_gaze
+# except:
+#     print('cannot load face gaze estimator!! Dont do evalutaion based on estimator')
 
-from Utils.D6_rotation import gaze_to_d6
+# from Utils.D6_rotation import gaze_to_d6
 
 class RenderUtils(object):
     def __init__(self, view_num, device, opt: BaseOptions) -> None:
@@ -200,7 +201,6 @@ class RenderUtils(object):
 
     def render_gaze_vect(self,coarse_fg_rgb,cam_info,face_gaze):
         #face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
-
         try:
             face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
         except:
