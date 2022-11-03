@@ -23,6 +23,7 @@ class BaseOptions(object):
         self.world_z1 = 2.5
         self.world_z2 = -3.5
         self.mlp_hidden_nchannels = 384
+        self.feat_addition_alpha = 1.0
 
         if para_dict is None:
             self.featmap_size = 32

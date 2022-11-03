@@ -11,7 +11,7 @@ from .Coordmap import AddCoords
 
 ###add gaze branch feature here, feat size output torch.Size([1, 256, 32, 32])
 class HeadNeRFNet_Gaze(nn.Module):
-    def __init__(self, opt: BaseOptions, include_vd, hier_sampling, eye_gaze_dim=64,include_vp=True) -> None:
+    def __init__(self, opt, include_vd, hier_sampling, eye_gaze_dim=64,include_vp=True) -> None:
         super().__init__()
 
         self.hier_sampling = hier_sampling
@@ -23,7 +23,7 @@ class HeadNeRFNet_Gaze(nn.Module):
         self.add_coord = AddCoords()
         
 
-    def _build_info(self, opt: BaseOptions):
+    def _build_info(self, opt):
         
         self.num_sample_coarse = opt.num_sample_coarse
         self.num_sample_fine = opt.num_sample_fine
@@ -45,6 +45,7 @@ class HeadNeRFNet_Gaze(nn.Module):
         self.featmap_size = opt.featmap_size
         self.featmap_nc = opt.featmap_nc        # num_channel
         self.pred_img_size = opt.pred_img_size
+        self.feat_addition_alpha = opt.feat_addition_alpha
         self.opt = opt
         
 
@@ -85,13 +86,17 @@ class HeadNeRFNet_Gaze(nn.Module):
         else:
             gaze_channels = 3+self.eye_gaze_dim
 
+        print(f'feat addtion weight is {self.feat_addition_alpha}!!')
         self.fg_CD_predictor= MLPforHeadNeRF_Gaze(vp_channels=vp_channels,vd_channels=vd_channels,
-                                                    gaze_channels=gaze_channels,h_channel=self.mlp_h_channel,res_nfeat=self.featmap_nc)
+                                                    gaze_channels=gaze_channels,h_channel=self.mlp_h_channel,res_nfeat=self.featmap_nc,alpha=self.feat_addition_alpha)
 
-    def eye_gaze_branch(self,input_gaze,eye_mask_tensor,FGvp_embedder,include_vp = False,use_temp=False):
+    def eye_gaze_branch(self,input_gaze,eye_mask_tensor,FGvp_embedder,include_vp = False,use_temp=False,add_noise=False):
         #coord_map = get_coord_maps(size = self.featmap_size).repeat(batch_size,1,1,1)
         if use_temp:
             input_gaze = torch.zeros_like(input_gaze)
+            if add_noise:
+                gaussian_noise = torch.normal(0, 0.08, size=(input_gaze.size(0),2)).cuda()
+                input_gaze += gaussian_noise.repeat(1,input_gaze.size(1)//2)##add guassian noise to input template gaze
 
         batch_size = eye_mask_tensor.size(0)
         img_size = eye_mask_tensor.size(-1)
@@ -117,9 +122,9 @@ class HeadNeRFNet_Gaze(nn.Module):
         Gaze_embedder = self.eye_gaze_branch(input_gaze,eye_mask_tensor,FGvp_embedder,include_vp=self.include_vp)
 
         if for_train:
-            Temp_Gaze_embedder = self.eye_gaze_branch(input_gaze,eye_mask_tensor,FGvp_embedder,include_vp=self.include_vp,use_temp=True)
+            Temp_Gaze_embedder = self.eye_gaze_branch(input_gaze,eye_mask_tensor,FGvp_embedder,include_vp=self.include_vp,use_temp=True,add_noise=True)
         else:
-            Temp_Gaze_embedder = None
+            Temp_Gaze_embedder = self.eye_gaze_branch(input_gaze,eye_mask_tensor,FGvp_embedder,include_vp=self.include_vp,use_temp=True,add_noise=False)
 
         if self.include_vd:
             ori_FGvd_embedder = torch.cat([FGvd_embedder, appea_code], dim=1)
@@ -167,9 +172,9 @@ class HeadNeRFNet_Gaze(nn.Module):
             fg_feat_temp = fg_feat_temp.view(batch_size, self.featmap_nc, self.featmap_size, self.featmap_size) #torch.Size([1, 256, 32,32]) 
             bg_alpha_temp = bg_alpha_temp.view(batch_size, 1, self.featmap_size, self.featmap_size)# torch.Size([1, 1, 32, 32])    
             
-            bg_featmap = self.neural_render.get_bg_featmap() #torch.Size([1, 256, 32, 32])
+            # bg_featmap = self.neural_render.get_bg_featmap() #torch.Size([1, 256, 32, 32])
 
-            template_featmap = fg_feat_temp + bg_alpha_temp * bg_featmap  #torch.Size([1, 256, 32, 32])
+            template_featmap = fg_feat_temp + bg_alpha * bg_featmap  #torch.Size([1, 256, 32, 32])
             template_img = self.neural_render(template_featmap) 
                
             res["template_img"] = template_img

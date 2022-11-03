@@ -88,13 +88,14 @@ class MLPforNeRF(nn.Module):
 
 class MLPforHeadNeRF_Gaze(nn.Module):
 
-    def __init__(self, vp_channels, vd_channels,gaze_channels, n_layers = 8, h_channel = 256, res_nfeat = 3) -> None:
+    def __init__(self, vp_channels, vd_channels,gaze_channels, n_layers = 8, h_channel = 256, res_nfeat = 3, alpha = 0.5) -> None:
         super().__init__()
 
         self.vp_channels = vp_channels
         self.vd_channels = vd_channels
         self.n_layers = n_layers
         self.h_channel = h_channel
+        self.alpha = alpha
 
         self.skips = [n_layers // 2]
         self.res_nfeat = res_nfeat
@@ -152,9 +153,9 @@ class MLPforHeadNeRF_Gaze(nn.Module):
             if i in self.skips:
                 x = torch.cat([batch_embed_vps, x], dim=1)
         
-
+        rgb_feat_temp,density_feat_temp = self.gaze_layers(batch_embed_gaze_temp)
         if for_train:
-            rgb_feat_temp,density_feat_temp = self.gaze_layers(batch_embed_gaze_temp)
+            #rgb_feat_temp,density_feat_temp = self.gaze_layers(batch_embed_gaze_temp)
             temp_x = x.clone()
             ####template prediction
             density_temp = self._modules["density_module"](temp_x + density_feat_temp)
@@ -166,6 +167,11 @@ class MLPforHeadNeRF_Gaze(nn.Module):
             rgb_temp = self._modules["RGB_layer_2"](temp_x + rgb_feat_temp)
             if self.res_nfeat == 3:
                 rgb_temp = torch.sigmoid(rgb_temp)
+        
+        alpha = self.alpha
+        rgb_feat = rgb_feat * alpha + rgb_feat_temp * (1 - alpha)
+        density_feat = density_feat * alpha + density_feat_temp * (1 - alpha)
+
 
         ####current prediction
         density = self._modules["density_module"](x + density_feat)

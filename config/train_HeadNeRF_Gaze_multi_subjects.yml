@@ -14,11 +14,10 @@ base_opt:
   featmap_size: 32
   featmap_nc: 256
   pred_img_size: 256
-  feat_addition_alpha: 1.0 #feat addition aplpha
   
 dataset_config:
   dataset_path: ./XGaze_data/processed_data_10cam #where we stored processed data
-  keys_to_use: ['subject0000'] ##subject to use
+  keys_to_use: ['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008'] ##subject to use
   camera_dir: ./XGaze_data/camera_parameters ##folder which saved camera parameter
   transform: Null #transformation to input image
   is_shuffle: True #whether to shuffle data when loading
@@ -30,7 +29,7 @@ dataset_config:
 
 training_config:
   model_name: HeadNeRF_Gaze # HeadNeRF
-  comment: 'Add gaze feat before vol-rendering, Add gaussian noise to template gaze (0,0.08), high template loss, weighted sum of eye gaze feat 1.0'  ##comment in log file to describe the experiment
+  comment: 'Add gaze feat before vol-rendering, multi_subject, high template loss'  ##comment in log file to describe the experiment
   #data_param
   data_dir: data/xgaze #Directory of the data
   batch_size: 2
