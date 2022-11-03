@@ -16,8 +16,6 @@ import os
 import numpy as np
 
 import shutil
-
-from HeadNeRFOptions import BaseOptions
 from NetWorks.HeadNeRFNet import HeadNeRFNet,HeadNeRFNet_Gaze
 from Utils.HeadNeRFLossUtils import HeadNeRFLossUtils
 from Utils.RenderUtils import RenderUtils
@@ -94,13 +92,13 @@ class Trainer(object):
             check_dict = torch.load(self.headnerf_options, map_location=torch.device("cpu"))
 
             para_dict = check_dict["para"]
-            self.opt = BaseOptions(para_dict)
+            self.opt = config.base_opt
 
             self.model = model_list[config.model_name](self.opt, include_vd=False, hier_sampling=False,eye_gaze_dim=self.eye_gaze_dim)  
             self._load_model_parameter(check_dict)
             print(f'load model parameter from {self.headnerf_options},set include_eye gaze to be {self.include_eye_gaze}')
         else:
-            self.opt = BaseOptions()
+            self.opt = config.base_opt
             self.model = model_list[config.model_name](self.opt, include_vd=False, hier_sampling=False,eye_gaze_dim=self.eye_gaze_dim)   
             print(f'Train model from scratch, set include_eye gaze to be {self.include_eye_gaze}')     
         
@@ -291,6 +289,7 @@ class Trainer(object):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
             
+            
             if self.disentangle:  
                 if "template_eye_loss" in batch_loss_dict:
                     loop_bar.set_description("Opt, Head_loss/Img_disp/Img_temp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["template_eye_loss"].item()) )  
@@ -421,14 +420,11 @@ class Trainer(object):
 
 
 if __name__ == '__main__':
-    check_dict = torch.load("TrainedModels/model_Reso32.pth", map_location=torch.device("cpu"))
-    para_dict = check_dict["para"]
-    opt = BaseOptions(para_dict)
-    model = HeadNeRFNet(opt, include_vd=False, hier_sampling=False,include_gaze=True)  
-    import ipdb
-    ipdb.set_trace()
-    model.load_state_dict(check_dict["net"])
-
-
-
-
+    pass
+    # check_dict = torch.load("TrainedModels/model_Reso32.pth", map_location=torch.device("cpu"))
+    # para_dict = check_dict["para"]
+    # opt = BaseOptions(para_dict)
+    # model = HeadNeRFNet(opt, include_vd=False, hier_sampling=False,include_gaze=True)  
+    # import ipdb
+    # ipdb.set_trace()
+    # model.load_state_dict(check_dict["net"])

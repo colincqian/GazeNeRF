@@ -24,6 +24,9 @@ class Dict2Class(object):
     def __init__(self, my_dict):
         for key in my_dict:
             setattr(self, key, my_dict[key])
+    
+    def add(self,key,value):
+        setattr(self,key,value)
 
 def parse_argument():
     parser = argparse.ArgumentParser(description='Specifiy config file path')
@@ -80,6 +83,7 @@ def run(training_config,dataset_config,base_opt):
                         )
 
     # instantiate trainer
+    training_config.add("base_opt",opt)
     trainer = Trainer(training_config, data_loader)
 
     # either train

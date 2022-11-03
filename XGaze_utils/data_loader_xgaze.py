@@ -346,7 +346,10 @@ class GazeDataset_normailzed_from_hdf(Dataset):
             )
 
             if self.use_template:
-                data_info['template_img'] = self.template_image_index[(key,camera_index)] #gaze in screen space
+                template_image = self.template_image_index[(key,camera_index)] #gaze in screen space
+                template_image[mask_img < 0.5] = 1.0
+                template_image_tensor = (torch.from_numpy(template_image).permute(2, 0, 1)).unsqueeze(0).to(self.device)
+                data_info['template_img'] = template_image_tensor
                 
 
         return data_info
@@ -371,9 +374,9 @@ class GazeDataset_normailzed_from_hdf(Dataset):
             if gt_img_size != self.pred_img_size:
                 template_image = cv2.resize(template_image, dsize=self.img_size, fx=0, fy=0, interpolation=cv2.INTER_LINEAR)
             
-            img_tensor = (torch.from_numpy(template_image).permute(2, 0, 1)).unsqueeze(0).to(self.device)#not sure RGB or BRG
+            #img_tensor = (torch.from_numpy(template_image).permute(2, 0, 1)).unsqueeze(0).to(self.device)#not sure RGB or BRG
 
-            self.template_image_index[(subject_idx,cam_index)] = img_tensor
+            self.template_image_index[(subject_idx,cam_index)] = template_image
 
 
     def load_3dmm_params(self,index):
