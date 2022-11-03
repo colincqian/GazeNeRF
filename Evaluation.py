@@ -33,10 +33,14 @@ from prettytable import PrettyTable
 from train_headnerf import load_config
 
 #define eye gaze base
-UPPER_RIGHT = torch.tensor([0.25,-0.5])
-UPPER_LEFT = torch.tensor([0.25,0.6])
-LOWER_RIGHT = torch.tensor([-0.5,-0.5])
-LOWER_LEFT = torch.tensor([-0.5,0.6])
+# UPPER_RIGHT = torch.tensor([0.25,-0.5])
+# UPPER_LEFT = torch.tensor([0.25,0.6])
+# LOWER_RIGHT = torch.tensor([-0.5,-0.5])
+# LOWER_LEFT = torch.tensor([-0.5,0.6])
+UPPER_RIGHT = torch.tensor([0.8,-0.8])
+UPPER_LEFT = torch.tensor([0.8,0.8])
+LOWER_RIGHT = torch.tensor([-0.8,-0.8])
+LOWER_LEFT = torch.tensor([-0.8,0.8])
 
 model_list = {
     'HeadNeRF':HeadNeRFNet,
@@ -475,6 +479,41 @@ class FittingImage(object):
         self.perform_fitting()
         self.save_res(f'processed_image{image_index}', save_root)
     
+    def render_gaze_redirection_gif(self,hdf_file_path,image_index, save_root,num_frames=10):
+        if os.path.exists(save_root):
+            shutil.rmtree(save_root)
+            os.mkdir(save_root)
+        else:
+            os.mkdir(save_root)
+
+        self.load_data(hdf_file_path,image_index)
+        # base_name = os.path.basename(img_path)[4:-4]
+        self.perform_fitting()
+
+        self.tar_code_info ={}
+        direction_list = [LOWER_RIGHT,UPPER_RIGHT,UPPER_LEFT,LOWER_LEFT,LOWER_RIGHT]
+        morph_res_seq = []
+        vec_results_seq = []
+        for i in range(len(direction_list)-1):
+            start = direction_list[i]
+            end = direction_list[i+1]
+            
+            for i in tqdm(range(num_frames)):
+                tv = 1.0 - (i / (num_frames - 1))
+                input_face_gaze = start * tv + end * (1 - tv)
+                rendered_results,cam_info,face_gaze = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=input_face_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
+                rendered_results = cv2.cvtColor(rendered_results, cv2.COLOR_BGR2RGB)
+                morph_res_seq.append(rendered_results)
+                rendered_results_vect,e_v2,e_h2 = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
+                vec_results_seq.append(rendered_results_vect)
+        
+        morph_save_path = os.path.join(save_root,'gaze_redirection_gif.gif')
+        imageio.mimsave(morph_save_path, morph_res_seq, 'GIF', duration=self.duration)
+
+
+
+
+
 
     def gridsample_face_gaze(self,hdf_file_path,image_index,save_root,vis_vect=True,resolution=21,print_freq = 10,cam_index=0):
         self.load_data(hdf_file_path,image_index,cam_idx=cam_index)
@@ -645,11 +684,11 @@ class FittingImage(object):
 
             rendered_results,cam_info,face_gaze = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=self.gaze_tensor,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
             
-            inmat_np = torch.linalg.inv(self.res_cam_info['batch_inv_inmats']).detach().cpu().numpy()
-            inmat_np = inmat_np.reshape((3,3))
-            distortion_np = np.zeros([1,5])
-            inmat_np[0,0] *=10; inmat_np[1,1] *=10; inmat_np[0,2] *=10; inmat_np[1,2] *=10
-            cam_info = {'camera_matrix':inmat_np, 'camera_distortion':distortion_np}
+            # inmat_np = torch.linalg.inv(self.res_cam_info['batch_inv_inmats']).detach().cpu().numpy()
+            # inmat_np = inmat_np.reshape((3,3))
+            # distortion_np = np.zeros([1,5])
+            # inmat_np[0,0] *=10; inmat_np[1,1] *=10; inmat_np[0,2] *=10; inmat_np[1,2] *=10
+            # cam_info = {'camera_matrix':inmat_np, 'camera_distortion':distortion_np}
             
             gt_img = (self.img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
             gt_img = cv2.cvtColor(gt_img, cv2.COLOR_BGR2RGB)
@@ -844,8 +883,9 @@ if __name__ == "__main__":
                                         cam_index=cam_id) #grid sample gaze space
         elif eval_config.choice == 'multi_sub':
             cam_id = cam_included[0]
+            hdf_file_temp = hdf_file
             for subject_id in subject_included:
-                hdf_file = os.path.join(hdf_file,f'processed_{subject_id}')
+                hdf_file = os.path.join(hdf_file_temp,f'processed_{subject_id}')
                 subfolder = f'gridsample_images/{subject_id}'
                 tt.gridsample_face_gaze(hdf_file,image_index,save_root=os.path.join(save_root,subfolder),resolution=eval_config.resolution,\
                                         print_freq=eval_config.print_freq,\
@@ -872,3 +912,12 @@ if __name__ == "__main__":
         tt.full_evaluation(dataset_dir=hdf_file,\
                             subjects_included=subject_included,\
                             save_root=os.path.join(save_root,sub_folder),sample_size=eval_config.sample_size,print_freq=eval_config.print_freq)
+
+    if eval_config.mode == 'render_gaze_redirction':
+        sub_folder = 'gaze_redirection_output'
+        for subject in subject_included:
+            hdf_file =os.path.join(hdf_file,f'processed_test_{subject}')
+            tt.render_gaze_redirection_gif(hdf_file_path=hdf_file,
+                                            image_index=image_index,
+                                            save_root=os.path.join(save_root,sub_folder,subject),num_frames=10)
+

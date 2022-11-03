@@ -48,23 +48,23 @@ training_config:
     template_loss_mask: non_eye # full_head
 
 eval_config:
-  mode: 'gridsample_face_gaze' #["full_evaluation","gridsample_face_gaze"]
+  mode: 'render_gaze_redirction' #["full_evaluation","gridsample_face_gaze"]
   model_name: 'HeadNeRF_Gaze' #['HeadNeRF_Gaze','HeadNeRF']
-  model_path: 'TrainedModels/learning_template_change/add gaussian noise/epoch_22_0.92_21.34_0.04_ckpt.pth.tar'
+  model_path: 'TrainedModels/learning_template_change/multi_subjects/epoch_19_0.89_19.16_0.06_ckpt.pth.tar'
   hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
-  image_index: 0 #base image index
+  cam_included: [0,1,2,3,4,5,6,7,8,9]
+  
   gaze_dim: 64
   eye_gaze_scale_factor: 1.0
   vis_gaze_vect: True
   D6_rotation: False
   save_root: 'experiment_document'
-  ##mode parameter
-  choice: 'multi_cam' #'multi_sub' multi_cam
-  print_freq: 10 #freq to print out rendered image
-  resolution: 21 #resolution to sample gaze space
-  cam_included: [0] #,1,2,3,4,5,6,7,8,9]
+  sample_size: 200 #total sample size for data evaluation
+  print_freq: 1 #freq to print out rendered image
+  #mode specific param
   subject_included: ['subject0000'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
-
+  image_index: 0
+ 
 
 
 

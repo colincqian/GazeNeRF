@@ -49,8 +49,8 @@ training_config:
 
 eval_config:
   mode: 'full_evaluation' #["full_evaluation","gridsample_face_gaze"]
-  model_name: 'HeadNeRF' #['HeadNeRF_Gaze','HeadNeRF']
-  model_path: 'TrainedModels/anchor_template_disp_version/epoch_20_0.89_19.14_0.07_ckpt.pth.tar'
+  model_name: 'HeadNeRF_Gaze' #['HeadNeRF_Gaze','HeadNeRF']
+  model_path: 'TrainedModels/learning_template_change/add gaussian noise/epoch_22_0.92_21.34_0.04_ckpt.pth.tar'
   hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
   cam_included: [0,1,2,3,4,5,6,7,8,9]
   image_index: 0
@@ -61,8 +61,8 @@ eval_config:
   save_root: 'experiment_document'
   #mode specific param
   sample_size: 200 #total sample size for data evaluation
-  print_freq: 10 #freq to print out rendered image
-  subject_included: ['subject0000'] #['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
+  print_freq: 1 #freq to print out rendered image
+  subject_included: ['subject0000'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
  
 
 
