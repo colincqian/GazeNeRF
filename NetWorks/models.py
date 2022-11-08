@@ -143,8 +143,6 @@ class MLPforHeadNeRF_Gaze(nn.Module):
         batch_embed_vps: [B, C_1, N_r, N_s]
         batch_embed_vds: [B, C_2, N_r, N_s]
         '''
-        rgb_feat,density_feat = self.gaze_layers(batch_embed_gaze)
-
         x = batch_embed_vps
         for i in range(self.n_layers):
             x = self._modules["FeaExt_module_%d"%i](x)
@@ -152,7 +150,15 @@ class MLPforHeadNeRF_Gaze(nn.Module):
 
             if i in self.skips:
                 x = torch.cat([batch_embed_vps, x], dim=1)
+
+        if not for_train and x.device == torch.device("cuda:0"):
+            ##save cuda mem when test locally
+            self.gaze_layers.to("cpu")
+            batch_embed_gaze = batch_embed_gaze.to("cpu")
+            batch_embed_gaze_temp = batch_embed_gaze_temp.to("cpu")
         
+        rgb_feat,density_feat = self.gaze_layers(batch_embed_gaze)
+
         rgb_feat_temp,density_feat_temp = self.gaze_layers(batch_embed_gaze_temp)
         if for_train:
             #rgb_feat_temp,density_feat_temp = self.gaze_layers(batch_embed_gaze_temp)
@@ -171,7 +177,8 @@ class MLPforHeadNeRF_Gaze(nn.Module):
         alpha = self.alpha
         rgb_feat = rgb_feat * alpha + rgb_feat_temp * (1 - alpha)
         density_feat = density_feat * alpha + density_feat_temp * (1 - alpha)
-
+        rgb_feat = rgb_feat.to(x.device)
+        density_feat = density_feat.to(x.device)
 
         ####current prediction
         density = self._modules["density_module"](x + density_feat)

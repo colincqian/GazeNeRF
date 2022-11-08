@@ -40,12 +40,13 @@ def load_config(config_file):
     with open(config_file,'r') as f:
         print(f'----Load Configuration from {config_file}----')
         config = yaml.load(f,Loader=yaml.FullLoader)
-
-    config_dic = {
-        "training_config":Dict2Class(config['training_config']),
-        "base_opt": config['base_opt'],
-        "dataset_config": config['dataset_config']
-        }
+    
+    config_dic = {}
+    for k,v in config.items():
+        if k in ['training_config','eval_config']:
+            config_dic[k] = Dict2Class(v)
+        if k in ["base_opt","dataset_config"]:
+            config_dic[k] = v
 
     return config_dic
 

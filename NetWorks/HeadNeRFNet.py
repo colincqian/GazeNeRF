@@ -46,6 +46,7 @@ class HeadNeRFNet_Gaze(nn.Module):
         self.featmap_nc = opt.featmap_nc        # num_channel
         self.pred_img_size = opt.pred_img_size
         self.feat_addition_alpha = opt.feat_addition_alpha
+        self.template_gaze_noise = opt.template_gaze_noise
         self.opt = opt
         
 
@@ -98,6 +99,7 @@ class HeadNeRFNet_Gaze(nn.Module):
                 gaussian_noise = torch.normal(0, 0, size=input_gaze.size()).cuda()
                 input_gaze += gaussian_noise
 
+
         batch_size = eye_mask_tensor.size(0)
         img_size = eye_mask_tensor.size(-1)
         
@@ -111,6 +113,7 @@ class HeadNeRFNet_Gaze(nn.Module):
         # FGvp_embedder:([1, 3, 1024, 64])
         Gaze_feat = Gaze_feat.view(batch_size,-1,self.featmap_size * self.featmap_size).unsqueeze(-1).repeat(1,1,1,64) #torch.Size([2, 1 + 2n, 1024,64] 
         if include_vp:
+            Gaze_feat = Gaze_feat.to(FGvp_embedder.device)
             Gaze_feat = torch.cat([FGvp_embedder, Gaze_feat], dim=1)
         #Gaze_feat = self.gaze_feat_predictor(Gaze_feat) ##eye_mask_tensor: torch.Size([2, 256, 32, 32] 
         return Gaze_feat # (batch_size,feat_dim,map_pixel,point_num)

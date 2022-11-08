@@ -1,0 +1,1 @@
+python Evaluation.py --config_file_path config/full_evaluation.yml
