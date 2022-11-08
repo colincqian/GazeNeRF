@@ -1,3 +1,23 @@
+base_opt:
+  bg_type: white
+  iden_code_dims: 100
+  expr_code_dims: 79
+  text_code_dims: 100
+  illu_code_dims: 27
+  auxi_shape_code_dims: 179
+  auxi_appea_code_dims: 127
+  num_sample_coarse: 64
+  num_sample_fine: 128
+  world_z1: 2.5
+  world_z2: -3.5
+  mlp_hidden_nchannels: 384
+  featmap_size: 32
+  featmap_nc: 256
+  pred_img_size: 256
+  #specific params
+  feat_addition_alpha: 0.08 #feat addition aplpha
+  template_gaze_noise: 0.08
+
 training_config:
   model_name: HeadNeRF_Gaze # HeadNeRF
   comment: 'Add gaze feat before vol-rendering, use eye mask data info, 
@@ -50,17 +70,17 @@ training_config:
 eval_config:
   mode: 'full_evaluation' #["full_evaluation","gridsample_face_gaze"]
   model_name: 'HeadNeRF_Gaze' #['HeadNeRF_Gaze','HeadNeRF']
-  model_path: 'TrainedModels/learning_template_change/add gaussian noise/epoch_22_0.92_21.34_0.04_ckpt.pth.tar'
+  model_path: 'TrainedModels/learning_template_change/add gaussian noise_0.8_BETA_0.8/epoch_19_0.92_21.49_0.04_ckpt.pth.tar'
   hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
   cam_included: [0,1,2,3,4,5,6,7,8,9]
   image_index: 0
   gaze_dim: 64
   eye_gaze_scale_factor: 1.0
-  vis_gaze_vect: True
+  vis_gaze_vect: False #whether to vis gaze vect
   D6_rotation: False
   save_root: 'experiment_document'
   #mode specific param
-  sample_size: 200 #total sample size for data evaluation
+  sample_size: 20 #total sample size for data evaluation
   print_freq: 1 #freq to print out rendered image
   subject_included: ['subject0000'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
  

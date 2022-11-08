@@ -1,3 +1,21 @@
+base_opt:
+  bg_type: white
+  iden_code_dims: 100
+  expr_code_dims: 79
+  text_code_dims: 100
+  illu_code_dims: 27
+  auxi_shape_code_dims: 179
+  auxi_appea_code_dims: 127
+  num_sample_coarse: 64
+  num_sample_fine: 128
+  world_z1: 2.5
+  world_z2: -3.5
+  mlp_hidden_nchannels: 384
+  featmap_size: 32
+  featmap_nc: 256
+  pred_img_size: 256
+  feat_addition_alpha: 0.5 #feat addition aplpha
+  
 training_config:
   model_name: HeadNeRF_Gaze # HeadNeRF
   comment: 'Add gaze feat before vol-rendering, use eye mask data info, 
@@ -50,7 +68,7 @@ training_config:
 eval_config:
   mode: 'render_gaze_redirction' #["full_evaluation","gridsample_face_gaze"]
   model_name: 'HeadNeRF_Gaze' #['HeadNeRF_Gaze','HeadNeRF']
-  model_path: 'TrainedModels/learning_template_change/multi_subjects/epoch_19_0.89_19.16_0.06_ckpt.pth.tar'
+  model_path: 'TrainedModels/learning_template_change/add gaussian noise_0.8_BETA_0.5/epoch_15_0.92_21.47_0.04_ckpt.pth.tar'
   hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
   cam_included: [0,1,2,3,4,5,6,7,8,9]
   
