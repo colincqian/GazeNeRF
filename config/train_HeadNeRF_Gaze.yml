@@ -65,7 +65,7 @@ training_config:
     vgg: 1.0
     eye_loss: 10
     template_loss: 0.5
-    template_eye_loss: 5
+    template_eye_loss: 0.0
     image_disp_loss: 1.0
     lm_disp_loss: 1.0
     delta_eular: 0.001

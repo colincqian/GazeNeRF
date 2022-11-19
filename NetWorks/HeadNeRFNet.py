@@ -96,8 +96,8 @@ class HeadNeRFNet_Gaze(nn.Module):
         if use_temp:
             input_gaze = torch.zeros_like(input_gaze)
             if add_noise:
-                gaussian_noise = torch.normal(0, self.template_gaze_noise, size=(input_gaze.size(0),2)).cuda()
-                input_gaze += gaussian_noise.repeat(1,input_gaze.size(1)//2)##add guassian noise to input template gaze
+                gaussian_noise = torch.normal(0, self.template_gaze_noise, size=input_gaze.size()).cuda()
+                input_gaze += gaussian_noise
 
         batch_size = eye_mask_tensor.size(0)
         img_size = eye_mask_tensor.size(-1)

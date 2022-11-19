@@ -373,7 +373,7 @@ class Trainer(object):
                 input_file_path, ckpt['epoch'])
         )
 
-    def _display_current_rendered_image(self,pred_dict,img_tensor,iter):
+    def _display_current_rendered_image(self,pred_dict,img_tensor,iter,template_gt=None):
         coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
         coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         #coarse_fg_rgb = coarse_fg_rgb[:, :, [2, 1, 0]]
@@ -384,6 +384,10 @@ class Trainer(object):
             template_img = pred_dict["coarse_dict"]["template_img"]
             template_img = (template_img[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
             res_img = np.concatenate([res_img, template_img], axis=1)
+        
+        if template_gt is not None:
+            gt_template_img = (template_gt[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+            res_img = np.concatenate([res_img, gt_template_img], axis=1)
         
         log_path = './logs/temp_image/' + 'epoch' + str(self.cur_epoch)
         if not os.path.exists(log_path):

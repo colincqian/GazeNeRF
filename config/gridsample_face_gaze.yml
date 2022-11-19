@@ -14,7 +14,9 @@ base_opt:
   featmap_size: 32
   featmap_nc: 256
   pred_img_size: 256
-  feat_addition_alpha: 0.5 #feat addition aplpha
+  #specific params
+  feat_addition_alpha: 0.8 #feat addition aplpha
+  template_gaze_noise: 0
   
 training_config:
   model_name: HeadNeRF_Gaze # HeadNeRF
@@ -32,7 +34,7 @@ training_config:
   lr_decay_factor: 0.1
   #misc
   use_gpu: True
-  gpu_id: 6
+  gpu_id: 0
   pre_trained_model_path: ./ckpt/epoch_24_ckpt.pth.tar
   print_freq: 50
   ckpt_dir: ./logs/ckpt
@@ -68,7 +70,7 @@ training_config:
 eval_config:
   mode: 'gridsample_face_gaze' #["full_evaluation","gridsample_face_gaze"]
   model_name: 'HeadNeRF_Gaze' #['HeadNeRF_Gaze','HeadNeRF']
-  model_path: 'TrainedModels/learning_template_change/add gaussian noise_ver1_0.8/epoch_22_0.92_21.34_0.04_ckpt.pth.tar'
+  model_path: 'TrainedModels/learning_template_change/no_guassian_beta_0.8/FIX/epoch_24_0.92_21.40_0.04_ckpt.pth.tar'
   hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
   image_index: 0 #base image index
   gaze_dim: 64

@@ -160,6 +160,7 @@ class MLPforHeadNeRF_Gaze(nn.Module):
         rgb_feat,density_feat = self.gaze_layers(batch_embed_gaze)
 
         rgb_feat_temp,density_feat_temp = self.gaze_layers(batch_embed_gaze_temp)
+
         if for_train:
             #rgb_feat_temp,density_feat_temp = self.gaze_layers(batch_embed_gaze_temp)
             temp_x = x.clone()
