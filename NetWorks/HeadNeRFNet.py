@@ -174,9 +174,9 @@ class HeadNeRFNet_Gaze(nn.Module):
             fg_feat_temp = fg_feat_temp.view(batch_size, self.featmap_nc, self.featmap_size, self.featmap_size) #torch.Size([1, 256, 32,32]) 
             bg_alpha_temp = bg_alpha_temp.view(batch_size, 1, self.featmap_size, self.featmap_size)# torch.Size([1, 1, 32, 32])    
             
-            # bg_featmap = self.neural_render.get_bg_featmap() #torch.Size([1, 256, 32, 32])
+            bg_featmap = self.neural_render.get_bg_featmap() #torch.Size([1, 256, 32, 32])
 
-            template_featmap = fg_feat_temp + bg_alpha * bg_featmap  #torch.Size([1, 256, 32, 32])
+            template_featmap = fg_feat_temp + bg_alpha_temp * bg_featmap  #torch.Size([1, 256, 32, 32])
             template_img = self.neural_render(template_featmap) 
                
             res["template_img"] = template_img

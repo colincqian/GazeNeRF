@@ -22,7 +22,10 @@ from Utils.D6_rotation import gaze_to_d6
 from scipy import stats
 
 import matplotlib
-matplotlib.use("QtAgg")
+try:
+	matplotlib.use("QtAgg")
+except:
+	pass
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import shutil

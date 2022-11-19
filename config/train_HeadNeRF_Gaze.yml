@@ -15,6 +15,8 @@ base_opt:
   featmap_nc: 256
   pred_img_size: 256
   feat_addition_alpha: 1.0 #feat addition aplpha
+  template_gaze_noise: 0.08
+  
   
 dataset_config:
   dataset_path: ./XGaze_data/processed_data_10cam #where we stored processed data
@@ -30,7 +32,7 @@ dataset_config:
 
 training_config:
   model_name: HeadNeRF_Gaze # HeadNeRF
-  comment: 'Add gaze feat before vol-rendering, Add gaussian noise to template gaze (0,0.08), high template loss, weighted sum of eye gaze feat 1.0'  ##comment in log file to describe the experiment
+  comment: 'Add gaze feat before vol-rendering, feat addition 0.8 white eye issue solved'  ##comment in log file to describe the experiment
   #data_param
   data_dir: data/xgaze #Directory of the data
   batch_size: 2
@@ -74,8 +76,7 @@ training_config:
     expr_code: 1.0
     appea_code: 0.001
     bg_code: 0.01
-    template_loss_mask: non_eye # full_head
-
+    template_loss_mask: non_eye # full_heads
 
   
   
