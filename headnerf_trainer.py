@@ -289,7 +289,6 @@ class Trainer(object):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
             
-            
             if self.disentangle:  
                 if "template_eye_loss" in batch_loss_dict:
                     loop_bar.set_description("Opt, Head_loss/Img_disp/Img_temp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["template_eye_loss"].item()) )  
@@ -332,7 +331,7 @@ class Trainer(object):
                 count+=1
 
             if iter % self.print_freq == 0 and iter != 0:
-                self._display_current_rendered_image(pred_dict,gt_img,iter)
+                self._display_current_rendered_image(pred_dict,gt_img,iter,template_gt=data_info['template_img'].squeeze(1).to(self.device))
         
         output_dict['SSIM'] /= count
         output_dict['PSNR'] /= count
@@ -373,7 +372,7 @@ class Trainer(object):
                 input_file_path, ckpt['epoch'])
         )
 
-    def _display_current_rendered_image(self,pred_dict,img_tensor,iter):
+    def _display_current_rendered_image(self,pred_dict,img_tensor,iter,template_gt=None):
         coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
         coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         #coarse_fg_rgb = coarse_fg_rgb[:, :, [2, 1, 0]]
@@ -385,6 +384,10 @@ class Trainer(object):
             template_img = (template_img[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
             res_img = np.concatenate([res_img, template_img], axis=1)
         
+        if template_gt is not None:
+            gt_template_img = (template_gt[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+            res_img = np.concatenate([res_img, gt_template_img], axis=1)
+
         log_path = './logs/temp_image/' + 'epoch' + str(self.cur_epoch)
         if not os.path.exists(log_path):
             os.mkdir(log_path)
