@@ -349,12 +349,16 @@ class Trainer(object):
             filename = add + '_ckpt.pth.tar'
         else:
             filename ='ckpt.pth.tar'
+
+        if not os.path.exists(self.ckpt_dir):
+            os.makedirs(self.ckpt_dir)
+
         ckpt_path = os.path.join(self.ckpt_dir, filename)
         torch.save(state, ckpt_path)
 
         print('save file to: ', filename)
 
-    def load_checkpoint(self, input_file_path='./ckpt/ckpt.pth.tar', is_strict=True):
+    def load_checkpoint(self, input_file_path='./ckpt/ckpt.pth.tar', is_strict=True, finetune=True):
         """
         Load the copy of a model.
         """
@@ -363,9 +367,13 @@ class Trainer(object):
 
         # load variables from checkpoint
         self.model.load_state_dict(ckpt['net'], strict=is_strict)
-        self.optimizer.load_state_dict(ckpt['optim_state'])
-        self.scheduler.load_state_dict(ckpt['scheule_state'])
-        self.start_epoch = ckpt['epoch'] 
+        if not finetune:
+            self.optimizer.load_state_dict(ckpt['optim_state'])
+            self.scheduler.load_state_dict(ckpt['scheule_state'])
+            self.start_epoch = ckpt['epoch'] 
+            
+        if finetune:
+            print(f"Finetuning to model {self.ckpt_dir}")
 
         print(
             "[*] Loaded {} checkpoint @ epoch {}".format(

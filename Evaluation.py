@@ -714,8 +714,8 @@ class FittingImage(object):
                     
                 output_dict['vertical_error'][count] = e_v2
                 output_dict['horizontal_error'][count] = e_h2
-                output_dict['vertical_error_ref'][count] = e_v1
-                output_dict['horizontal_error_ref'][count] = e_h1
+                output_dict['vertical_error_ref'][count] = abs(e_v1 - e_v2)
+                output_dict['horizontal_error_ref'][count] = abs(e_h1 - e_h2)
 
                         ## compute gaze gap between label and estimated
             for k,v in eval_metrics.items():
