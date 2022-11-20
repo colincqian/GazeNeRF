@@ -329,7 +329,7 @@ class Trainer(object):
                 output_dict['PSNR'] += eval_metrics['PSNR']
                 output_dict['LPIPS'] += eval_metrics['LPIPS']
                 count+=1
-
+            
             if iter % self.print_freq == 0 and iter != 0:
                 self._display_current_rendered_image(pred_dict,gt_img,iter,template_gt=data_info['template_img'].squeeze(1).to(self.device))
         
