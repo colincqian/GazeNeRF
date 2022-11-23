@@ -40,7 +40,7 @@ training_config:
   #train param
   is_train: True
   epochs: 5 ##finetuning epochs
-  init_lr: 0.0001
+  init_lr: 0.000005
   lr_patience: 15
   lr_decay_factor: 0.1
   #misc
@@ -57,7 +57,7 @@ training_config:
   eye_gaze_scale_factor: 1
   eye_gaze_disentangle: False
   gaze_D6_rotation: False
-  resume: ''   ##ckpt file dir to finetune on
+  resume: 'TrainedModels/baseline_multi_subject_model.tar'   ##ckpt file dir to finetune on
   gaze_info_mask: eye_mask #img_mask
   #loss param
   loss_config:

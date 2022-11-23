@@ -70,7 +70,7 @@ training_config:
 eval_config:
   mode: 'full_evaluation' #["full_evaluation","gridsample_face_gaze"]
   model_name: 'HeadNeRF_Gaze' #['HeadNeRF_Gaze','HeadNeRF']
-  model_path: 'TrainedModels/multi_subject_10_cam_final/subject009_finetune/epoch_4_0.88_20.88_0.04_ckpt.pth.tar'
+  model_path: 'TrainedModels/multi_subject_10_cam_final/epoch_20_0.89_19.40_0.05_ckpt.pth.tar'
   hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
   cam_included: [0,1,2,3,4,5,6,7,8,9]
   image_index: 0
@@ -80,14 +80,6 @@ eval_config:
   D6_rotation: False
   save_root: 'experiment_document'
   #mode specific param
-  sample_size: 10 #total sample size for data evaluation
-  print_freq: 1 #freq to print out rendered image
-  subject_included: ['subject0009'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
- 
-
-
-
-  
-  
-
-
+  sample_size: 1400 #total sample size for data evaluation
+  print_freq: 10 #freq to print out rendered image
+  subject_included: ['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
