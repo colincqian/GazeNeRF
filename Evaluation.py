@@ -531,20 +531,21 @@ class FittingImage(object):
                 rendered_results,cam_info,face_gaze = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=input_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
                 if self.vis_vect:
                     rendered_results,e_v2,e_h2 = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
-                e_v_map[row_idx,col_idx] = e_v2 * 180 / np.pi
-                e_h_map[row_idx,col_idx] = e_h2 * 180 / np.pi ##in degree
+                    e_v_map[row_idx,col_idx] = e_v2 * 180 / np.pi
+                    e_h_map[row_idx,col_idx] = e_h2 * 180 / np.pi ##in degree
                 if (row_idx * resolution + col_idx ) % print_freq == 0:
                     cv2.imwrite(os.path.join(save_root,f'grid_sample{pitch,yaw}.png'),rendered_results)
         
-        e_total_map = e_v_map + e_h_map
+        if self.vis_vect:
+            e_total_map = e_v_map + e_h_map
 
-        self._polt_2d_map_with_colorbar(e_v_map,title='vertical_error',save_root=save_root)
-        self._polt_2d_map_with_colorbar(e_h_map,title='horizontal_error',save_root=save_root)
-        self._polt_2d_map_with_colorbar(e_total_map,title='total_error',save_root=save_root)
+            self._polt_2d_map_with_colorbar(e_v_map,title='vertical_error',save_root=save_root)
+            self._polt_2d_map_with_colorbar(e_h_map,title='horizontal_error',save_root=save_root)
+            self._polt_2d_map_with_colorbar(e_total_map,title='total_error',save_root=save_root)
 
-        np.save(os.path.join(save_root,'vertical_error_map.npy'),e_v_map)
-        np.save(os.path.join(save_root,'horizontal_error_map.npy'),e_h_map)
-        np.save(os.path.join(save_root,'total_error_map.npy'),e_total_map)
+            np.save(os.path.join(save_root,'vertical_error_map.npy'),e_v_map)
+            np.save(os.path.join(save_root,'horizontal_error_map.npy'),e_h_map)
+            np.save(os.path.join(save_root,'total_error_map.npy'),e_total_map)
         
     def sample_face_gaze_ground_truth_image(self,hdf_file_path,image_sample_num,resolution=21,cam_index=0):
         '''
