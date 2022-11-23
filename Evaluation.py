@@ -500,7 +500,7 @@ class FittingImage(object):
                 rendered_results,cam_info,face_gaze = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=input_face_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
                 rendered_results = cv2.cvtColor(rendered_results, cv2.COLOR_BGR2RGB)
                 morph_res_seq.append(rendered_results)
-                rendered_results_vect,e_v2,e_h2 = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
+                rendered_results_vect,e_v2,e_h2,_ = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
                 vec_results_seq.append(rendered_results_vect)
         
         morph_save_path = os.path.join(save_root,'gaze_redirection_gif.gif')
@@ -530,7 +530,7 @@ class FittingImage(object):
                 input_gaze = torch.tensor([pitch,yaw])
                 rendered_results,cam_info,face_gaze = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=input_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
                 if self.vis_vect:
-                    rendered_results,e_v2,e_h2 = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
+                    rendered_results,e_v2,e_h2,_ = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
                 e_v_map[row_idx,col_idx] = e_v2 * 180 / np.pi
                 e_h_map[row_idx,col_idx] = e_h2 * 180 / np.pi ##in degree
                 if (row_idx * resolution + col_idx ) % print_freq == 0:
@@ -575,7 +575,7 @@ class FittingImage(object):
             gt_img = (self.img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
             gt_img = cv2.cvtColor(gt_img, cv2.COLOR_BGR2RGB)
             try:
-                gt_img,e_v1,e_h1 = self.render_utils.render_gaze_vect(gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
+                gt_img,e_v1,e_h1,_ = self.render_utils.render_gaze_vect(gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
                 e_v1_list.append(e_v1 * 180/np.pi)
                 e_h1_list.append(e_h1 * 180/np.pi)
             except:
@@ -622,6 +622,8 @@ class FittingImage(object):
         'horizontal_error':0,
         'vertical_error_ref':0,
         'horizontal_error_ref':0,
+        'vertical_pred_gap':0,
+        'horizontal_pred_gap':0,
         'sample_size':0
         }
         total_count = 0
@@ -665,6 +667,8 @@ class FittingImage(object):
         'horizontal_error':[0]*sample_size,
         'vertical_error_ref':[0]*sample_size,
         'horizontal_error_ref':[0]*sample_size,
+        'vertical_pred_gap':[0]*sample_size,
+        'horizontal_pred_gap':[0]*sample_size,
         'sample_size':0
         }
         count = 0
@@ -703,8 +707,8 @@ class FittingImage(object):
             diff_rendered[mask != 255] = [0, 0, 255]
 
             if self.vis_vect:
-                rendered_results,e_v2,e_h2 = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
-                gt_img,e_v1,e_h1 = self.render_utils.render_gaze_vect(gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
+                rendered_results,e_v2,e_h2,pred_gaze = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
+                gt_img,e_v1,e_h1,pred_gaze_gt = self.render_utils.render_gaze_vect(gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
                 
 
                 if e_v2 == -1 or e_v1 == -1:
@@ -716,6 +720,8 @@ class FittingImage(object):
                 output_dict['horizontal_error'][count] = e_h2
                 output_dict['vertical_error_ref'][count] = abs(e_v1 - e_v2)
                 output_dict['horizontal_error_ref'][count] = abs(e_h1 - e_h2)
+                output_dict['vertical_pred_gap'][count] = abs(pred_gaze[0] - pred_gaze_gt[0])
+                output_dict['horizontal_pred_gap'][count] = abs(pred_gaze[1] - pred_gaze_gt[1])
 
                         ## compute gaze gap between label and estimated
             for k,v in eval_metrics.items():
@@ -755,7 +761,7 @@ class FittingImage(object):
         self.perform_fitting()
         rendered_results,cam_info,face_gaze = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=self.gaze_tensor,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
         if self.vis_vect:
-            rendered_results,e_v2,e_h2 = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
+            rendered_results,e_v2,e_h2,_ = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
 
         inmat_np = torch.linalg.inv(self.res_cam_info['batch_inv_inmats']).detach().cpu().numpy()
         inmat_np = inmat_np.reshape((3,3))
@@ -765,10 +771,10 @@ class FittingImage(object):
         
         gt_img = (self.img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         gt_img = cv2.cvtColor(gt_img, cv2.COLOR_BGR2RGB)
-        gt_img,e_v1,e_h1 = self.render_utils.render_gaze_vect(gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
+        gt_img,e_v1,e_h1,_ = self.render_utils.render_gaze_vect(gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
 
         uncropped_gt_img = cv2.cvtColor(self.uncropped_gt_image, cv2.COLOR_BGR2RGB)
-        uncropped_gt_img,e_v0,e_h0 = self.render_utils.render_gaze_vect(uncropped_gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
+        uncropped_gt_img,e_v0,e_h0,_ = self.render_utils.render_gaze_vect(uncropped_gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
 
         if e_h0 < 0 or e_v0 < 0 or e_h1 < 0 or e_v1 < 0 or e_h2 < 0 or e_v2 < 0 :
             # any face not detected

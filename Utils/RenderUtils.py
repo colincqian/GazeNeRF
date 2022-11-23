@@ -205,7 +205,7 @@ class RenderUtils(object):
             face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
         except:
             print('no face detected')
-            return coarse_fg_rgb, -1, -1
+            return coarse_fg_rgb, -1, -1, (0,0)
         cv2.putText(img=face_patch_gaze, text=str(pred_gaze_np), org=(0, 50), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(255, 0, 0),thickness=1)
 
         input_gaze_np = face_gaze.detach().cpu().numpy()
@@ -221,7 +221,7 @@ class RenderUtils(object):
         cv2.putText(img=face_patch_gaze, text='vertical_e' + str(e_v), org=(0, 450), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(0, 0, 0),thickness=1)
         cv2.putText(img=face_patch_gaze, text='horizontal_e' + str(e_h), org=(0,475), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(0, 0, 0),thickness=1)
         
-        return face_patch_gaze,e_v,e_h
+        return face_patch_gaze,e_v,e_h,pred_gaze_np
 
     def render_gaze_redirect_res(self, net, code_info_1, code_info_2, nums, scale_factor,gaze_dim,vis_vect=True, D6_rotation=False,cam_info = None):
         ##code1 and code2 only have difference in last few columns (gaze tensor)

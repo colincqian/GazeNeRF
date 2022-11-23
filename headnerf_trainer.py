@@ -271,8 +271,12 @@ class Trainer(object):
                     disp_pred_dict,disp_gaze = self.eye_gaze_displacement(data_info,code_info,cam_info)
                 else:
                     disp_pred_dict = None
+                
+                gt_label = {"gt_rgb" : data_info['img'].squeeze(1).to(self.device)}
 
-                gt_label = {"gt_rgb" : data_info['img'].squeeze(1).to(self.device), "template_img_gt" : data_info['template_img'].squeeze(1).to(self.device)}
+                if 'template_img' in data_info:
+                    gt_label["template_img_gt"] = data_info['template_img'].squeeze(1).to(self.device)
+
                 mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
                 
                 ##compute head loss
@@ -289,13 +293,8 @@ class Trainer(object):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
             
-            if self.disentangle:  
-                if "template_eye_loss" in batch_loss_dict:
-                    loop_bar.set_description("Opt, Head_loss/Img_disp/Img_temp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["template_eye_loss"].item()) )  
-                else:
-                    loop_bar.set_description("Opt, Head_loss/Img_disp/Lm_disp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["lm_disp_loss"].item()) )  
-            else:
-                loop_bar.set_description("Opt, Head_loss/Temp_loss/Temp_eye_loss: %.6f / %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["template_loss"].item(),batch_loss_dict["template_eye_loss"].item()) )  
+            
+            loop_bar.set_description("Opt, Head_loss/Percep_loss/Eye_loss: %.6f / %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["vgg"].item(),batch_loss_dict["eye_loss"].item()) )  
 
 
                 
@@ -331,7 +330,10 @@ class Trainer(object):
                 count+=1
             
             if iter % self.print_freq == 0 and iter != 0:
-                self._display_current_rendered_image(pred_dict,gt_img,iter,template_gt=data_info['template_img'].squeeze(1).to(self.device))
+                if 'template_img' in data_info:
+                    self._display_current_rendered_image(pred_dict,gt_img,iter,template_gt=data_info['template_img'].squeeze(1).to(self.device))
+                else:
+                    self._display_current_rendered_image(pred_dict,gt_img,iter)
         
         output_dict['SSIM'] /= count
         output_dict['PSNR'] /= count

@@ -83,8 +83,6 @@ eval_config:
   sample_size: 2000 #total sample size for data evaluation
   print_freq: 10 #freq to print out rendered image
   subject_included: ['subject0013'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
- 
-
 
 
   

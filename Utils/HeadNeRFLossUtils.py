@@ -202,11 +202,11 @@ class HeadNeRFLossUtils(object):
         # assert delta_cam_info is not None
         head_mask = (mask_tensor >= 0.5)  
         nonhead_mask = (mask_tensor < 0.5)  
-        if type(gt_rgb) is dict:
+        if "template_img_gt" in gt_rgb:
             gt_ori_rgb = gt_rgb["gt_rgb"]
             gt_template_image = gt_rgb["template_img_gt"]
         else:
-            gt_ori_rgb = gt_rgb
+            gt_ori_rgb = gt_rgb["gt_rgb"]
 
         coarse_data_dict = pred_dict["coarse_dict"]
         loss_dict = self.calc_data_loss(coarse_data_dict, gt_ori_rgb, head_mask, nonhead_mask)
