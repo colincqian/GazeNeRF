@@ -372,10 +372,10 @@ class FittingImage(object):
                 #cam info : batch_Rmats: torch.Size([1, 3, 3])  batch_Tvecs:torch.Size([1, 3, 1])   batch_inv_inmats:torch.Size([1, 3, 3])
                 #pred_dict['coarse_dict'] -> dict_keys(['merge_img', 'bg_img']) -> torch.Size([1, 3, 512, 512])
 
-                
+                gt_label = {"gt_rgb":self.img_tensor}
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=delta_cam_info, opt_code_dict=opt_code_dict, pred_dict=pred_dict, disp_pred_dict=None,
-                    gt_rgb=self.img_tensor, mask_tensor=self.mask_tensor,loss_weight=self.config.loss_config
+                    gt_rgb=gt_label, mask_tensor=self.mask_tensor,loss_weight=self.config.loss_config
                 )
 
             optimizer.zero_grad()
