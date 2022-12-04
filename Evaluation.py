@@ -20,6 +20,7 @@ from tool_funcs import put_text_alignmentcenter
 import h5py
 from Utils.D6_rotation import gaze_to_d6
 from scipy import stats
+from distinctipy import distinctipy
 
 import matplotlib
 try:
@@ -33,7 +34,9 @@ import shutil
 from Utils.Eval_utils import calc_eval_metrics
 import pickle
 from prettytable import PrettyTable
-from train_headnerf import load_config
+from train_headnerf import load_config,Dict2Class
+
+from Utils.disentanglement_test_file import gaze2code_disentanglement
 
 #define eye gaze base
 # UPPER_RIGHT = torch.tensor([0.25,-0.5])
@@ -254,6 +257,7 @@ class FittingImage(object):
             shape_code = torch.cat([self.base_iden + self.iden_offset, self.base_expr + self.expr_offset], dim=-1)
             appea_code = torch.cat([self.base_text, self.base_illu], dim=-1) + self.appea_offset
         
+
         opt_code_dict = {
             "bg":None,
             "iden":self.iden_offset,
@@ -372,10 +376,10 @@ class FittingImage(object):
                 #cam info : batch_Rmats: torch.Size([1, 3, 3])  batch_Tvecs:torch.Size([1, 3, 1])   batch_inv_inmats:torch.Size([1, 3, 3])
                 #pred_dict['coarse_dict'] -> dict_keys(['merge_img', 'bg_img']) -> torch.Size([1, 3, 512, 512])
 
-                
+                gt_label = {"gt_rgb":self.img_tensor}
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=delta_cam_info, opt_code_dict=opt_code_dict, pred_dict=pred_dict, disp_pred_dict=None,
-                    gt_rgb=self.img_tensor, mask_tensor=self.mask_tensor,loss_weight=self.config.loss_config
+                    gt_rgb=gt_label, mask_tensor=self.mask_tensor,loss_weight=self.config.loss_config
                 )
 
             optimizer.zero_grad()
@@ -506,18 +510,43 @@ class FittingImage(object):
         morph_save_path = os.path.join(save_root,'gaze_redirection_gif.gif')
         imageio.mimsave(morph_save_path, morph_res_seq, 'GIF', duration=self.duration)
 
+    def compute_calibrated_disentanglement_error(self,hdf_file_path,image_index,save_root,base_opt,mag_reso=5,cam_index=0,norm_max=1.0,vis=False):
+        def compute_calibrated_disentanglement_error(apparent_gaze_norm,disentanglement_error,x_interp=np.array([0,0.1,0.2,0.3,0.4,0.5,0.6])):
+            y_interp = np.interp(x=x_interp,xp=apparent_gaze_norm,fp=disentanglement_error)
+            y_delt = y_interp[1:] - y_interp[0]
+            y_delt = y_delt/x_interp[1:]
+            return np.mean(y_delt)
+        output_dict ={}
+        ref_output_dict = {}
+        
+        gaze_dict = self.plot_gazemagnitude_with_redirection(hdf_file_path,image_index,save_root,mag_reso=mag_reso,cam_index=cam_index,norm_max=norm_max,vis=vis)
+        
+        disentangle_dict = self.plot_gazemagnitude_with_disentanglement(hdf_file_path,image_index,save_root,base_opt,mag_reso=mag_reso,cam_index=cam_index,norm_max=norm_max,vis=vis)
+
+        apparent_gaze_norm = gaze_dict['apparent_gaze_norm']
+        
+        for key in disentangle_dict:
+            output_dict[key] = compute_calibrated_disentanglement_error(apparent_gaze_norm,disentangle_dict[key])
+            ref_output_dict[key] = np.mean(disentangle_dict[key])
+
+        t = PrettyTable(['Codes', 'Calibrated_results'])
+        for k,v in output_dict.items():
+            t.add_row([k,v])
+        print(t)
+
+        t = PrettyTable(['Codes', 'UnCalibrated_results'])
+        for k,v in ref_output_dict.items():
+            t.add_row([k,v])
+        print(t)
 
 
-
-
-
-    def gridsample_face_gaze(self,hdf_file_path,image_index,save_root,vis_vect=True,resolution=21,print_freq = 10,cam_index=0):
+    def plot_gazemagnitude_with_redirection(self,hdf_file_path,image_index,save_root,mag_reso=5,cam_index=0,norm_max=1.0,vis=False):
+        plot_static = []
+        plot_ve = []
+        plot_he = []
+        plot_apparent_gaze = []
         self.load_data(hdf_file_path,image_index,cam_idx=cam_index)
         self.perform_fitting()
-        e_v_map = np.zeros((resolution,resolution))
-        e_h_map = np.zeros((resolution,resolution))
-
-        loop_bar1 = tqdm(enumerate(np.linspace(1,-1,resolution,endpoint=True)),leave=True, position = 0, desc=" row loop")
 
         if os.path.exists(save_root):
             shutil.rmtree(save_root)
@@ -525,27 +554,289 @@ class FittingImage(object):
         else:
             os.mkdir(save_root)
 
-        for row_idx,pitch in loop_bar1:
-            for col_idx,yaw in enumerate(np.linspace(1,-1,resolution,endpoint=True)):
-                input_gaze = torch.tensor([pitch,yaw])
+        norm_list = np.linspace(0.0,norm_max,num=mag_reso+1,endpoint=True)
+        for cur_gaze_norm in tqdm(norm_list[1:]):
+            redir_res =  {"static_error":0,
+                          "vertical_error":0,
+                          "horizontal_error":0,
+                          "apparent_gaze_norm":0 }
+            gaze_list = torch.tensor([[cur_gaze_norm,0],
+                                      [-cur_gaze_norm,0],
+                                      [0,cur_gaze_norm],
+                                      [0,-cur_gaze_norm]])
+            for input_gaze in gaze_list:
                 rendered_results,cam_info,face_gaze = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=input_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
                 if self.vis_vect:
-                    rendered_results,e_v2,e_h2,_ = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
+                    rendered_results,e_v2,e_h2,pred_gaze = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
+                    redir_res["vertical_error"] += e_v2 * 180 / np.pi
+                    redir_res["horizontal_error"] += e_h2 * 180 / np.pi ##in degree
+                    redir_res["static_error"] += (e_v2 + e_h2) * 180 / np.pi
+                    redir_res["apparent_gaze_norm"] += np.linalg.norm(pred_gaze)
+
+                if vis:
+                    cv2.imwrite(os.path.join(save_root,f'grid_sample{input_gaze[0].item(),input_gaze[1].item()}.png'),rendered_results)
+            
+            t = PrettyTable(['Metrics', 'Value'])
+
+            for k,v in redir_res.items():
+                t.add_row([k,v/len(gaze_list)])
+            print(t)
+            ####track error for plotting
+            plot_static.append(redir_res["static_error"]/len(gaze_list))
+            plot_ve.append(redir_res["vertical_error"]/len(gaze_list))
+            plot_he.append(redir_res["horizontal_error"]/len(gaze_list))
+            plot_apparent_gaze.append(redir_res["apparent_gaze_norm"]/len(gaze_list))
+
+        if vis:
+            np.save(file=os.path.join(save_root,'static_error.txt'),arr=np.array(plot_static))
+            np.save(file=os.path.join(save_root,'vertical_error.txt'),arr=np.array(plot_ve))
+            np.save(file=os.path.join(save_root,'horizontal_error.txt'),arr=np.array(plot_he))
+            np.save(file=os.path.join(save_root,'apparent_gaze_norm'),arr=np.array(plot_apparent_gaze))
+            
+            plt.plot(norm_list[1:],np.array(plot_static),color='green',label='static error')
+            plt.plot(norm_list[1:],np.array(plot_ve),color='red',label='verical error')
+            plt.plot(norm_list[1:],np.array(plot_he),color='blue',label='horizontal error')
+            plt.legend()
+
+            plt.xlabel("Gaze norm")
+            plt.ylabel("Re-dir. Error")
+
+            plt.savefig(os.path.join(save_root,'Re-dir_plot.png'))
+            plt.close()
+
+        return {
+            'static_error' : np.array(plot_static),
+            'vertical_error': np.array(plot_ve),
+            'horizontal_error': np.array(plot_he),
+            'apparent_gaze_norm': np.array(plot_apparent_gaze)
+        }
+    
+
+    def plot_gazemagnitude_with_disentanglement(self,hdf_file_path,image_index,save_root,base_opt,mag_reso=5,cam_index=0,norm_max=1.0,vis=False):
+        plot_res = {
+                "base_iden":[],
+                "base_expr":[],
+                "base_text":[],
+                "base_illu":[],
+                'appear_code':[],
+                'shape_code':[]
+                }
+        gaze2code_util = gaze2code_disentanglement(base_opt=base_opt,image_size=512,intermediate_size=256)
+        if os.path.exists(save_root):
+            shutil.rmtree(save_root)
+            os.mkdir(save_root)
+        else:
+            os.mkdir(save_root)
+
+        self.load_data(hdf_file_path,image_index,cam_idx=cam_index)
+        self.perform_fitting()
+        ref_gaze = torch.tensor([0,0])
+        ref_img_results,_,_ = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=ref_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
+        weight_constant = 1 #the weight error of the furthest point should be 1 / or cloest point to be 1
+        #weight_constant = 1 #or cloest point to be 1
+        cv2.imwrite(os.path.join(save_root,f'reference_frame.png'),ref_img_results)
+
+        norm_list = np.linspace(0.0,norm_max,num=mag_reso+1,endpoint=True)
+        for cur_gaze_norm in tqdm(norm_list[1:]):
+            disen_res =  {"base_iden":0,
+                "base_expr":0,
+                "base_text":0,
+                "base_illu":0,
+                'appear_code':0,
+                'shape_code':0}
+            gaze_list = torch.tensor([[cur_gaze_norm,0],
+                                      [-cur_gaze_norm,0],
+                                      [0,cur_gaze_norm],
+                                      [0,-cur_gaze_norm]])
+            for cur_gaze in gaze_list:
+                cur_img_results,_,_ = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=cur_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)         
+                temp_res = gaze2code_util.compute_image_attribute_displacement(img1 = ref_img_results,img2 = cur_img_results,use_img1_cache=True)
+
+                for key in disen_res.keys():
+                    disen_res[key] += temp_res[key] * (1.0) #set weight as 1
+
+                if vis:
+                    cv2.imwrite(os.path.join(save_root,f'grid_sample({cur_gaze[0].item(),cur_gaze[1].item()}).png'),cur_img_results)
+                    difference = abs(cv2.subtract(ref_img_results,cur_img_results))
+                    Conv_hsv_Gray = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
+                    ret, mask = cv2.threshold(Conv_hsv_Gray, 5, 255,cv2.THRESH_BINARY_INV)
+                    difference[mask != 255] = [0, 0, 255]
+                    diff_rendered = cur_img_results.copy()
+                    diff_rendered[mask != 255] = [0, 0, 255]
+                    cv2.imwrite(os.path.join(save_root,f'grid_sample({cur_gaze[0].item(),cur_gaze[1].item()})_diff.png'),difference)
+                    cv2.imwrite(os.path.join(save_root,f'grid_sample({cur_gaze[0].item(),cur_gaze[1].item()})_diffrender.png'),diff_rendered)
+
+            ####print out tables
+            t = PrettyTable(['Codes', 'Disp'])
+            for k,v in disen_res.items():
+                t.add_row([k,v/len(gaze_list)])
+                plot_res[k].append(v/len(gaze_list))
+            print(t)
+
+        colors = distinctipy.get_colors(len(plot_res))
+        for idx,key in enumerate(plot_res.keys()):
+            np.save(file=os.path.join(save_root,f'{key}_error_list.txt'),arr=np.array(plot_res[key]))
+            plt.plot(norm_list[1:],np.array(plot_res[key]),color=colors[idx],label=f'{key} disp')
+        plt.legend()
+
+        plt.xlabel("Gaze norm")
+        plt.ylabel("Disentangle error")
+
+        plt.savefig(os.path.join(save_root,'Disentangle_plot.png'))
+        plt.close()
+
+        output_dict={}
+        for idx,key in enumerate(plot_res.keys()):
+            output_dict[key] = np.array(plot_res[key])
+
+        return output_dict 
+
+
+    def evaluate_disentanglement_metrics_gaze2code(self,hdf_file_path,image_index,save_root,base_opt,gaze_range=1.0,num_samples=10,cam_index=0,print_freq=1):
+        res =  {"base_iden":0,
+                "base_expr":0,
+                "base_text":0,
+                "base_illu":0,
+                'appear_code':0,
+                'shape_code':0}
+
+        gaze2code_util = gaze2code_disentanglement(base_opt=base_opt,image_size=512,intermediate_size=256)
+        if os.path.exists(save_root):
+            shutil.rmtree(save_root)
+            os.mkdir(save_root)
+        else:
+            os.mkdir(save_root)
+
+        self.load_data(hdf_file_path,image_index,cam_idx=cam_index)
+        self.perform_fitting()
+        ref_gaze = torch.tensor([0,0])
+        ref_img_results,_,_ = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=ref_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
+        weight_constant = 1  #the weight error of the furthest point should be 1 / or cloest point to be 1
+        #weight_constant = 1 #or cloest point to be 1
+        cv2.imwrite(os.path.join(save_root,f'reference_frame.png'),ref_img_results)
+
+        for i in tqdm(range(num_samples)):
+            dv = np.random.uniform(low=-gaze_range,high=gaze_range)
+            dh = np.random.uniform(low=-gaze_range,high=gaze_range)
+            cur_gaze = torch.tensor([dv,dh])
+            cur_img_results,_,_ = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=cur_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
+            temp_res = gaze2code_util.compute_image_attribute_displacement(img1 = ref_img_results,img2 = cur_img_results,use_img1_cache=True)
+
+            for key in res.keys():
+                res[key] += temp_res[key] * (weight_constant) #closer samples have higher weights
+
+            if num_samples % print_freq == 0:
+                cv2.imwrite(os.path.join(save_root,f'grid_sample{dv,dh}.png'),cur_img_results)
+
+                difference = abs(cv2.subtract(ref_img_results,cur_img_results))
+                Conv_hsv_Gray = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
+                ret, mask = cv2.threshold(Conv_hsv_Gray, 5, 255,cv2.THRESH_BINARY_INV)
+                difference[mask != 255] = [0, 0, 255]
+                diff_rendered = cur_img_results.copy()
+                diff_rendered[mask != 255] = [0, 0, 255]
+                cv2.imwrite(os.path.join(save_root,f'grid_sample{dv,dh}_diff.png'),difference)
+                cv2.imwrite(os.path.join(save_root,f'grid_sample{dv,dh}_diffrender.png'),diff_rendered)
+
+        t = PrettyTable(['Codes', 'Disp'])
+        for k,v in res.items():
+            t.add_row([k,v/num_samples])
+
+        print(t)
+
+        with open(os.path.join(save_root,'gaze2code_disp.txt'), 'w') as w:
+            w.write(f'Model_name: {self.model_path}\n')
+            w.write(str(t))
+    
+
+    def gridsample_face_gaze(self,hdf_file_path,image_index,save_root,vis_vect=True,resolution=[21,21],print_freq = 10,cam_index=0,\
+                            gaze_range=[-1,1,-1,1],include_dynamic_error=False):
+        self.load_data(hdf_file_path,image_index,cam_idx=cam_index)
+        self.perform_fitting()
+        e_v_map = np.zeros(resolution)
+        e_h_map = np.zeros(resolution)
+        if include_dynamic_error:
+            pred_gaze_map = np.zeros((resolution[0],resolution[1],2))
+            gt_gaze_map = np.zeros((resolution[0],resolution[1],2))
+
+        if len(gaze_range) != 4:
+            print("Invalid gaze range input")
+            gaze_range=[-1,1,-1,1]
+
+        if os.path.exists(save_root):
+            shutil.rmtree(save_root)
+            os.mkdir(save_root)
+        else:
+            os.mkdir(save_root)
+
+        loop_bar1 = tqdm(enumerate(np.linspace(gaze_range[0],gaze_range[1],resolution[0],endpoint=True)),leave=True, position = 0, desc=" row loop")
+        for row_idx,pitch in loop_bar1:
+            for col_idx,yaw in enumerate(np.linspace(gaze_range[2],gaze_range[3],resolution[1],endpoint=True)):
+                input_gaze = torch.tensor([pitch,yaw]) #vertical error, horizontal error
+                rendered_results,cam_info,face_gaze = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=input_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
+                if self.vis_vect:
+                    rendered_results,e_v2,e_h2,pred_gaze = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
                     e_v_map[row_idx,col_idx] = e_v2 * 180 / np.pi
                     e_h_map[row_idx,col_idx] = e_h2 * 180 / np.pi ##in degree
-                if (row_idx * resolution + col_idx ) % print_freq == 0:
+                    if include_dynamic_error:
+                        pred_gaze_map[row_idx,col_idx,:] = pred_gaze
+                        gt_gaze_map[row_idx,col_idx,:] = [pitch,yaw]
+
+                if (row_idx * resolution[1] + col_idx ) % print_freq == 0:
                     cv2.imwrite(os.path.join(save_root,f'grid_sample{pitch,yaw}.png'),rendered_results)
         
         if self.vis_vect:
             e_total_map = e_v_map + e_h_map
-
-            self._polt_2d_map_with_colorbar(e_v_map,title='vertical_error',save_root=save_root)
-            self._polt_2d_map_with_colorbar(e_h_map,title='horizontal_error',save_root=save_root)
-            self._polt_2d_map_with_colorbar(e_total_map,title='total_error',save_root=save_root)
+            extend_range = np.multiply([180/np.pi,-180/np.pi,-180/np.pi,180/np.pi],gaze_range)
+            self._polt_2d_map_with_colorbar(e_v_map,title='vertical_error',save_root=save_root,extent=extend_range)
+            self._polt_2d_map_with_colorbar(e_h_map,title='horizontal_error',save_root=save_root,extent=extend_range)
+            self._polt_2d_map_with_colorbar(e_total_map,title='total_error',save_root=save_root,extent=extend_range)
 
             np.save(os.path.join(save_root,'vertical_error_map.npy'),e_v_map)
             np.save(os.path.join(save_root,'horizontal_error_map.npy'),e_h_map)
             np.save(os.path.join(save_root,'total_error_map.npy'),e_total_map)
+            
+            t = PrettyTable(['Metrics', 'Value'])
+            t.add_row(['V_e',np.mean(e_v_map)])
+            t.add_row(['H_e',np.mean(e_h_map)])
+            t.add_row(['Overall_e',np.mean(e_total_map)])
+
+            if include_dynamic_error:
+                num_path = self._compute_number_of_valid_path_in_grid(resolution[0],resolution[1])
+
+                delt_pred = np.zeros([num_path,2]) 
+                delt_gt = np.zeros([num_path,2]) 
+                idx_h = 0; idx_v = num_path-1  #save horizontal change from front, save vertical change from back
+
+                for row_idx in range(resolution[0]):
+                    for col_idx in range(resolution[1]):
+                        if col_idx + 1 < resolution[1]:
+                            #check right grid
+                            delt_pred[idx_h] = pred_gaze_map[row_idx,col_idx + 1,:] - pred_gaze_map[row_idx,col_idx,:]
+                            delt_gt[idx_h] = gt_gaze_map[row_idx,col_idx + 1,:] - gt_gaze_map[row_idx,col_idx,:]
+                            idx_h += 1
+                        if row_idx + 1 < resolution[0]: 
+                            #check down grid
+                            delt_pred[idx_v] = pred_gaze_map[row_idx + 1,col_idx,:] - pred_gaze_map[row_idx,col_idx,:]
+                            delt_gt[idx_v] = gt_gaze_map[row_idx + 1,col_idx ,:] - gt_gaze_map[row_idx,col_idx,:]
+                            idx_v -= 1
+
+                assert idx_h - idx_v == 1 #two pointer meet
+                h_dyn_error = np.mean(np.linalg.norm(delt_pred[:idx_h,:] - delt_gt[:idx_h,:],axis=1))
+                v_dyn_error = np.mean(np.linalg.norm(delt_pred[idx_h:,:] - delt_gt[idx_h:,:],axis=1))
+                total_dyn_error = np.mean(np.linalg.norm(delt_pred[:,:] - delt_gt[:,:],axis=1))
+
+                t.add_row(['h_dyn_error',h_dyn_error])
+                t.add_row(['v_dyn_error',v_dyn_error])
+                t.add_row(['total_dyn_error',total_dyn_error])
+                print(f'#####hor_step:{delt_gt[0,1]}  ver_step:{delt_gt[-1,0]}#####')
+
+            print(t)
+
+            with open(os.path.join(save_root,'error_table.txt'), 'w') as w:
+                w.write(f'Model_name: {self.model_path}\n')
+                w.write(str(t))
+
+        
         
     def sample_face_gaze_ground_truth_image(self,hdf_file_path,image_sample_num,resolution=21,cam_index=0):
         '''
@@ -816,7 +1107,7 @@ class FittingImage(object):
         cax = divider.append_axes('right', size='5%', pad=0.05)
 
         im = ax.imshow(data, extent=extent,interpolation=interpolation)
-        ax.plot([-30,-30,43,43,-30],[-30,15,15,-30,-30])  #pitch [-28.64,14.323], yaw [-28.64,42.97]
+        #ax.plot([-30,-30,43,43,-30],[-30,15,15,-30,-30])  #pitch [-28.64,14.323], yaw [-28.64,42.97]
                 
         fig.colorbar(im, cax=cax, orientation='vertical')
         ax.set_title(title)
@@ -843,7 +1134,9 @@ class FittingImage(object):
         dif_mask = cv2.inRange(rendered_results,np.array([250,250,250]),np.array([255,255,255]))
         overall_mask = cv2.bitwise_and(255 - dif_mask,self.head_mask_np)
         return overall_mask
-        
+    
+    def _compute_number_of_valid_path_in_grid(self,w,h):
+        return w * h * 4 - 2 * (w + h) - w * (h - 1) - h * (w - 1)
 
 def str2bool(v):
     return v.lower() in ('true', '1')
@@ -859,7 +1152,7 @@ if __name__ == "__main__":
     # torch.backends.cudnn.allow_tf32 = False
 
     parser = argparse.ArgumentParser(description='a framework for fitting a single image using HeadNeRF')
-    parser.add_argument("--config_file_path", type=str,help='Path to load config file')
+    parser.add_argument("-c","--config_file_path", type=str,help='Path to load config file')
     args = parser.parse_args()
 
     config_path = args.config_file_path    
@@ -887,6 +1180,9 @@ if __name__ == "__main__":
     # for image_index in range(50):
     #     tt.render_face_gaze_and_ground_truth_image(hdf_file,image_index,save_root='experiment_document/gaze_and_gt_image/')
     if eval_config.mode == 'gridsample_face_gaze':
+        include_dynamic_error = eval_config.include_dynamic_error
+        if eval_config.gaze_range:
+            gaze_range = eval_config.gaze_range
         if eval_config.choice == 'multi_cam':
             subject = subject_included[0]
             hdf_file = os.path.join(hdf_file,f'processed_{subject}')
@@ -894,7 +1190,7 @@ if __name__ == "__main__":
                 subfolder = f'gridsample_images/cam{cam_id}'
                 tt.gridsample_face_gaze(hdf_file,image_index,save_root=os.path.join(save_root,subfolder),resolution=eval_config.resolution,\
                                         print_freq=eval_config.print_freq,\
-                                        cam_index=cam_id) #grid sample gaze space
+                                        cam_index=cam_id,gaze_range=gaze_range,include_dynamic_error=include_dynamic_error) #grid sample gaze space
         elif eval_config.choice == 'multi_sub':
             cam_id = cam_included[0]
             hdf_file_temp = hdf_file
@@ -903,23 +1199,47 @@ if __name__ == "__main__":
                 subfolder = f'gridsample_images/{subject_id}'
                 tt.gridsample_face_gaze(hdf_file,image_index,save_root=os.path.join(save_root,subfolder),resolution=eval_config.resolution,\
                                         print_freq=eval_config.print_freq,\
-                                        cam_index=cam_id) #grid sample gaze space
+                                        cam_index=cam_id,gaze_range=gaze_range,include_dynamic_error=include_dynamic_error) #grid sample gaze space
 
     if eval_config.mode == 'gridsample_ground_truth_gaze':
         tt.sample_face_gaze_ground_truth_image(hdf_file,image_sample_num=eval_config.sample_size,resolution=eval_config.resolution) ##sample gt images and bilinear interpolate
         
-    ## 10 cam for 10 subject
-    # for subject_id in subject_included:
-    #     print(f'Sampling {subject_id} !')
-    #     hdf_file = 'XGaze_data/processed_data_10cam/processed_' + subject_id
-    #     save_root_base = os.path.join('experiment_document/gridsample_images/',subject_id)
-    #     #tt.gridsample_face_gaze(hdf_file,image_index,save_root=save_root,resolution=21,print_freq=10)
-    #     for cam_id in cam_included:
-    #         save_root = os.path.join(save_root_base,str(cam_id))
-    #         try:
-    #             tt.gridsample_face_gaze(hdf_file,image_index,save_root=save_root,resolution=11,print_freq=1,cam_index=cam_id)
-    #         except:
-    #             pass
+    if eval_config.mode == 'disentangle_gaze2code':
+        hdf_file_temp = hdf_file
+        for subject_id in subject_included:
+            hdf_file = os.path.join(hdf_file_temp,f'processed_{subject_id}')
+            subfolder = f'{subject_id}'
+            tt.evaluate_disentanglement_metrics_gaze2code(hdf_file,image_index,save_root=os.path.join(save_root,subfolder),\
+                                                            base_opt=Dict2Class(config["base_opt"]),\
+                                                            gaze_range=eval_config.gaze_range,\
+                                                            num_samples=eval_config.num_samples,\
+                                                            print_freq=eval_config.print_freq)
+
+    if eval_config.mode == 'plot_gazemag_vs_disentangle':
+        hdf_file_temp = hdf_file
+        for subject_id in subject_included:
+            hdf_file = os.path.join(hdf_file_temp,f'processed_{subject_id}')
+            subfolder = f'gazemag_analysis_disen/{subject_id}'
+            tt.plot_gazemagnitude_with_disentanglement(hdf_file,image_index,save_root=os.path.join(save_root,subfolder),\
+                                                        base_opt=Dict2Class(config["base_opt"]),\
+                                                        mag_reso=eval_config.mag_reso,vis=eval_config.vis_temp_results)
+
+    if eval_config.mode == 'plot_gazemag_vs_redir':
+        hdf_file_temp = hdf_file
+        for subject_id in subject_included:
+            hdf_file = os.path.join(hdf_file_temp,f'processed_{subject_id}')
+            subfolder = f'gazemag_analysis_redir/{subject_id}'
+            tt.plot_gazemagnitude_with_redirection(hdf_file,image_index,save_root=os.path.join(save_root,subfolder),\
+                                                        mag_reso=eval_config.mag_reso,vis=eval_config.vis_temp_results)
+
+    if eval_config.mode == 'calibrated_disentanglement_error':
+        hdf_file_temp = hdf_file
+        for subject_id in subject_included:
+            hdf_file = os.path.join(hdf_file_temp,f'processed_{subject_id}')
+            subfolder = f'calibrated_disentanglement/{subject_id}'
+            tt.compute_calibrated_disentanglement_error(hdf_file,image_index,save_root=os.path.join(save_root,subfolder),\
+                                                        base_opt=Dict2Class(config["base_opt"]),\
+                                                        mag_reso=eval_config.mag_reso,norm_max=eval_config.norm_max,vis=eval_config.vis_temp_results)
 
     if eval_config.mode == 'full_evaluation':
         sub_folder = 'evaluation_output/full_evaluation'

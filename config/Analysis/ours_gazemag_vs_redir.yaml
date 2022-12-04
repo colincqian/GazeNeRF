@@ -17,7 +17,7 @@ base_opt:
   #specific params
   feat_addition_alpha: 1.0 #feat addition aplpha
   template_gaze_noise: 0
-
+  
 training_config:
   model_name: HeadNeRF_Gaze # HeadNeRF
   comment: 'Add gaze feat before vol-rendering, use eye mask data info, 
@@ -34,14 +34,14 @@ training_config:
   lr_decay_factor: 0.1
   #misc
   use_gpu: True
-  gpu_id: 6
+  gpu_id: 0
   pre_trained_model_path: ./ckpt/epoch_24_ckpt.pth.tar
   print_freq: 50
   ckpt_dir: ./logs/ckpt
   headnerf_options: 'TrainedModels/model_Reso32HR.pth' #path to load headnerf options
   #gaze realted
   use_gt_camera: False
-  include_eye_gaze: False
+  include_eye_gaze: True
   eye_gaze_dimension: 64
   eye_gaze_scale_factor: 1
   eye_gaze_disentangle: False
@@ -68,22 +68,22 @@ training_config:
     template_loss_mask: non_eye # full_head
 
 eval_config:
-  mode: 'full_evaluation' #["full_evaluation","gridsample_face_gaze"]
+  mode: 'plot_gazemag_vs_redir' #["full_evaluation","gridsample_face_gaze"]
   model_name: 'HeadNeRF_Gaze' #['HeadNeRF_Gaze','HeadNeRF']
   model_path: 'TrainedModels/final_results/ours/subject0014_finetune/epoch_4_0.85_17.46_0.06_ckpt.pth.tar'
   hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
-  cam_included: [0,1,2,3,4,5,6,7,8,9]
-  image_index: 0
+  image_index: 0 #base image index
   gaze_dim: 64
   eye_gaze_scale_factor: 1.0
-  vis_gaze_vect: False #whether to vis gaze vect
+  vis_gaze_vect: True
   D6_rotation: False
-  save_root: 'experiment_document'
-  #mode specific param
-  sample_size: 2000 #total sample size for data evaluation
-  print_freq: 10 #freq to print out rendered image
-  subject_included: ['subject0014'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
- 
+  save_root: 'experiment_document/gazemag_analysis/ours'
+  ##mode parameter
+  mag_reso: 5 #freq to print out rendered image
+  vis_temp_results: True #disturbance for gaze
+  cam_included: [0] #,1,2,3,4,5,6,7,8,9]
+  subject_included: ['subject0014'] #,'subject0003','subject0004','subject0005'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
+
 
 
 

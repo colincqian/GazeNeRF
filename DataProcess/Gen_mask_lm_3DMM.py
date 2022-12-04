@@ -10,11 +10,14 @@ import cv2
 import h5py
 import argparse
 import torch
+import sys
+sys.path.append("/home/colinqian/Project/HeadNeRF/headnerf/DataProcess")
+sys.path.append("/home/colinqian/Project/HeadNeRF/headnerf/Fitting3DMM")
 
 from Gen_HeadMask import GenHeadMask
 from Gen_Landmark import  Gen2DLandmarks
-import sys
-sys.path.append("/home/colinqian/Project/HeadNeRF/headnerf/Fitting3DMM")
+
+
 
 #sys.path.append("/local/home/chqian/HeadNerf/Fitting3DMM")
 

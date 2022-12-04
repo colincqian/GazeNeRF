@@ -15,7 +15,7 @@ base_opt:
   featmap_nc: 256
   pred_img_size: 256
   #specific params
-  feat_addition_alpha: 1.0 #feat addition aplpha
+  feat_addition_alpha: 0.8 #feat addition aplpha
   template_gaze_noise: 0
   
 training_config:
@@ -41,7 +41,7 @@ training_config:
   headnerf_options: 'TrainedModels/model_Reso32HR.pth' #path to load headnerf options
   #gaze realted
   use_gt_camera: False
-  include_eye_gaze: False
+  include_eye_gaze: False   ##set to False if using HeadNeRF Gaze
   eye_gaze_dimension: 64
   eye_gaze_scale_factor: 1
   eye_gaze_disentangle: False
@@ -70,21 +70,22 @@ training_config:
 eval_config:
   mode: 'gridsample_face_gaze' #["full_evaluation","gridsample_face_gaze"]
   model_name: 'HeadNeRF_Gaze' #['HeadNeRF_Gaze','HeadNeRF']
-  model_path: 'TrainedModels/multi_subject_10_cam_final/epoch_20_0.89_19.40_0.05_ckpt.pth.tar'
+  model_path: 'TrainedModels/learning_template_change/no_guassian_beta_0.8/FIX/epoch_24_0.92_21.40_0.04_ckpt.pth.tar'
   hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
   image_index: 0 #base image index
   gaze_dim: 64
   eye_gaze_scale_factor: 1.0
-  vis_gaze_vect: False
+  vis_gaze_vect: True
   D6_rotation: False
   save_root: 'experiment_document'
   ##mode parameter
+  include_dynamic_error: True
   choice: 'multi_sub' #'multi_sub' multi_cam
   print_freq: 1 #freq to print out rendered image
-  resolution: 5 #resolution to sample gaze space
+  resolution: [2,2] #resolution to sample gaze space
   cam_included: [0] #,1,2,3,4,5,6,7,8,9]
-  subject_included: ['subject0000','subject0003','subject0004','subject0005'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
-
+  subject_included: ['subject0000'] #,'subject0003','subject0004','subject0005'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
+  gaze_range: [-0.5,0.25,-0.5,0.75]  #gaze range [pitch range, yaw range]
 
 
 

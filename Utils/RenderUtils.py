@@ -181,6 +181,7 @@ class RenderUtils(object):
                 "appea_code":appea_code
             }
 
+
         with torch.set_grad_enabled(False):
             pred_dict = net("test",batch_xy, batch_uv, **code_info,**cam_info)
 
@@ -192,10 +193,7 @@ class RenderUtils(object):
 
         coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
         coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
-        
-
-        # if vis_vect:    
-        #     return self.render_gaze_vect(coarse_fg_rgb.copy(),cam_info,face_gaze)
+    
 
         return coarse_fg_rgb,cam_info,face_gaze
 
