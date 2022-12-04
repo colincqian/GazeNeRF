@@ -76,7 +76,7 @@ eval_config:
   image_index: 0
   gaze_dim: 64
   eye_gaze_scale_factor: 1.0
-  vis_gaze_vect: True #whether to vis gaze vect
+  vis_gaze_vect: False #whether to vis gaze vect
   D6_rotation: False
   save_root: 'experiment_document'
   #mode specific param

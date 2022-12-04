@@ -14,21 +14,9 @@ base_opt:
   featmap_size: 32
   featmap_nc: 256
   pred_img_size: 256
+  #specific params
   feat_addition_alpha: 1.0 #feat addition aplpha
   template_gaze_noise: 0
-  
-  
-dataset_config:
-  dataset_path: ./XGaze_data/processed_data_10cam #where we stored processed data
-  keys_to_use: ['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008'] ##subject to use
-  camera_dir: ./XGaze_data/camera_parameters ##folder which saved camera parameter
-  transform: Null #transformation to input image
-  is_shuffle: True #whether to shuffle data when loading
-  index_file: Null #any index file specific data index
-  is_load_label: True #whether load gt gaze
-  device: cpu ##need to process numpy on cpu
-  filter_view: False #whether to filter camera view
-  use_template: False #whethre to use template
 
 training_config:
   model_name: HeadNeRF # HeadNeRF
@@ -39,7 +27,7 @@ training_config:
   num_workers: 5
   #train param
   is_train: True
-  epochs: 25
+  epochs: 5
   init_lr: 0.0001
   lr_patience: 15
   lr_decay_factor: 0.1
@@ -48,7 +36,7 @@ training_config:
   gpu_id: 6
   pre_trained_model_path: ./ckpt/epoch_24_ckpt.pth.tar
   print_freq: 50
-  ckpt_dir: ./logs/ckpt
+  ckpt_dir: ./logs/ckpt_subject0009
   headnerf_options: 'TrainedModels/model_Reso32HR.pth' #path to load headnerf options
   #gaze realted
   use_gt_camera: False
@@ -57,7 +45,7 @@ training_config:
   eye_gaze_scale_factor: 1
   eye_gaze_disentangle: False
   gaze_D6_rotation: False
-  resume: ''   ##ckpt file dir to resume training
+  resume: 'TrainedModels/headnerf_baseline_mutli_subject.tar'   ##ckpt file dir to resume training
   gaze_info_mask: eye_mask #img_mask
   #loss param
   loss_config:
@@ -77,6 +65,26 @@ training_config:
     appea_code: 0.001
     bg_code: 0.01
     template_loss_mask: non_eye # full_heads
+
+
+eval_config:
+  mode: 'full_evaluation' #["full_evaluation","gridsample_face_gaze"]
+  model_name: 'HeadNeRF' #['HeadNeRF_Gaze','HeadNeRF']
+  model_path: 'logs/ckpt_subject0010/epoch_1_0.89_19.88_0.04_ckpt.pth.tar'
+  hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
+  cam_included: [0,1,2,3,4,5,6,7,8,9]
+  image_index: 0
+  gaze_dim: 2
+  eye_gaze_scale_factor: 1.0
+  vis_gaze_vect: False #whether to vis gaze vect
+  D6_rotation: False
+  save_root: 'experiment_document'
+  #mode specific param
+  sample_size: 2000 #total sample size for data evaluation
+  print_freq: 10 #freq to print out rendered image
+  subject_included: ['subject0010'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
+ 
+
 
 
   
