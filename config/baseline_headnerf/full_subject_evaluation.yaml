@@ -70,11 +70,11 @@ training_config:
 eval_config:
   mode: 'full_evaluation' #["full_evaluation","gridsample_face_gaze"]
   model_name: 'HeadNeRF' #['HeadNeRF_Gaze','HeadNeRF']
-  model_path: 'logs/ckpt_subject0010/epoch_1_0.89_19.88_0.04_ckpt.pth.tar'
+  model_path: 'TrainedModels/EA_headnerf_baseline_mutli_subject.tar'
   hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
   cam_included: [0,1,2,3,4,5,6,7,8,9]
   image_index: 0
-  gaze_dim: 2
+  gaze_dim: 64
   eye_gaze_scale_factor: 1.0
   vis_gaze_vect: False #whether to vis gaze vect
   D6_rotation: False
@@ -82,7 +82,7 @@ eval_config:
   #mode specific param
   sample_size: 2000 #total sample size for data evaluation
   print_freq: 10 #freq to print out rendered image
-  subject_included: ['subject0010'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
+  subject_included: ['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
  
 
 

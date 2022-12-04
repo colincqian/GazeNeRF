@@ -39,7 +39,7 @@ training_config:
   num_workers: 5
   #train param
   is_train: True
-  epochs: 5
+  epochs: 2
   init_lr: 0.0001
   lr_patience: 15
   lr_decay_factor: 0.1
@@ -53,19 +53,20 @@ training_config:
   #gaze realted
   use_gt_camera: False
   include_eye_gaze: True
-  eye_gaze_dimension: 64
+  eye_gaze_dimension: 2
   eye_gaze_scale_factor: 1
   eye_gaze_disentangle: False
   gaze_D6_rotation: False
-  resume: 'TrainedModels/headnerf_baseline_mutli_subject.tar'   ##ckpt file dir to resume training
+  resume: 'TrainedModels/headnerf_baseline_feat2.tar'   ##ckpt file dir to resume training
   gaze_info_mask: eye_mask #img_mask
+  is_finetune: True
   #loss param
   loss_config:
     bg_loss: 1.0
     head_loss: 1.0
     nonhead_loss: 1.0
     vgg: 1.0
-    eye_loss: 10
+    eye_loss: 1
     template_loss: 0.0
     template_eye_loss: 0.0
     image_disp_loss: 0.0

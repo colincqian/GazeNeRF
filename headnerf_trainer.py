@@ -69,6 +69,8 @@ class Trainer(object):
         self.lr_patience = config.lr_patience
         self.lr_decay_factor = config.lr_decay_factor
         self.resume = config.resume
+        if self.resume:
+            self.is_finetune = config.is_finetune
 
 
         # misc params
@@ -124,7 +126,7 @@ class Trainer(object):
         self._build_tool_funcs()
 
         if self.resume:
-            self.load_checkpoint(self.resume)
+            self.load_checkpoint(self.resume,finetune=self.is_finetune)
             
         self.config = config
 
@@ -288,7 +290,7 @@ class Trainer(object):
             self.optimizer.zero_grad()
             batch_loss_dict["total_loss"].backward()
             self.optimizer.step()
-
+            
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
