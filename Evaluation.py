@@ -988,15 +988,15 @@ class FittingImage(object):
             gt_img[head_mask<0.5]=255
             rendered_results[head_mask<0.5]=255
 
-            eval_metrics = calc_eval_metrics(rendered_results.copy(),gt_img.copy(),vis=False,L1_loss=True)
+            # eval_metrics = calc_eval_metrics(rendered_results.copy(),gt_img.copy(),vis=False,L1_loss=True)
             
-            #visualiza difference map
-            difference = cv2.subtract(gt_img,rendered_results)
-            Conv_hsv_Gray = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
-            ret, mask = cv2.threshold(Conv_hsv_Gray, 0, 255,cv2.THRESH_BINARY_INV|cv2.THRESH_OTSU)
-            difference[mask != 255] = [0, 0, 255]
-            diff_rendered = rendered_results.copy()
-            diff_rendered[mask != 255] = [0, 0, 255]
+            # #visualiza difference map
+            # difference = cv2.subtract(gt_img,rendered_results)
+            # Conv_hsv_Gray = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
+            # ret, mask = cv2.threshold(Conv_hsv_Gray, 0, 255,cv2.THRESH_BINARY_INV|cv2.THRESH_OTSU)
+            # difference[mask != 255] = [0, 0, 255]
+            # diff_rendered = rendered_results.copy()
+            # diff_rendered[mask != 255] = [0, 0, 255]
 
             if self.vis_vect:
                 rendered_results,e_v2,e_h2,pred_gaze = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
@@ -1016,30 +1016,31 @@ class FittingImage(object):
                 output_dict['horizontal_pred_gap'][count] = abs(pred_gaze[1] - pred_gaze_gt[1])
 
                         ## compute gaze gap between label and estimated
-            for k,v in eval_metrics.items():
-                output_dict[k][count] = v
+            # for k,v in eval_metrics.items():
+            #     output_dict[k][count] = v
             count += 1
 
             if count % print_freq == 0:
-                res_img = np.concatenate([gt_img, rendered_results,difference,diff_rendered], axis=1)
-                cv2.imwrite(os.path.join(save_root,f'testing_image{count}.png'),res_img)
+                # res_img = np.concatenate([gt_img, rendered_results,difference,diff_rendered], axis=1)
+                # cv2.imwrite(os.path.join(save_root,f'testing_image{count}.png'),res_img)
+                cv2.imwrite(os.path.join(save_root,f'testing_image{count}.png'),rendered_results)
             
-        output_dict['sample_size'] = count
-        with open(os.path.join(save_root,f"{subjects_name}_eval_metrics.pkl"),'wb') as file:
-            pickle.dump(output_dict,file)
+        # output_dict['sample_size'] = count
+        # with open(os.path.join(save_root,f"{subjects_name}_eval_metrics.pkl"),'wb') as file:
+        #     pickle.dump(output_dict,file)
 
-        ##visualization
+        # ##visualization
 
-        t = PrettyTable(['Metrics', 'Value'])
-        for k,v in output_dict.items():
-            if k != 'sample_size':
-                mean_value = np.sum(v)/count
-                t.add_row([k,mean_value])
-        t.add_row(['sample_size',count])
-        print(t)
+        # t = PrettyTable(['Metrics', 'Value'])
+        # for k,v in output_dict.items():
+        #     if k != 'sample_size':
+        #         mean_value = np.sum(v)/count
+        #         t.add_row([k,mean_value])
+        # t.add_row(['sample_size',count])
+        # print(t)
 
-        with open(os.path.join(save_root,'error_table.txt'), 'w') as w:
-            w.write(str(t))
+        # with open(os.path.join(save_root,'error_table.txt'), 'w') as w:
+        #     w.write(str(t))
         
         return output_dict
 
