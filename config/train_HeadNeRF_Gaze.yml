@@ -35,7 +35,7 @@ training_config:
   comment: 'Add gaze feat before vol-rendering, feat addition 0.8 white eye issue solved'  ##comment in log file to describe the experiment
   #data_param
   data_dir: data/xgaze #Directory of the data
-  batch_size: 2
+  batch_size: 1
   num_workers: 5
   #train param
   is_train: True

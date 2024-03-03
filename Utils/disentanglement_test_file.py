@@ -74,32 +74,18 @@ if __name__ == "__main__":
     start = time.time()
     config = load_config("config/full_evaluation.yml")
     base_opt = Dict2Class(config["base_opt"])
+    dt = gaze2code_disentanglement(base_opt=base_opt)
 
     data_process = Data_Processor('','',img_size=512,intermediate_size=256)
 
     ref_img_strong = cv2.imread("experiment_document/disentanglement_error/strong_disentanglement/grid_sample(0.0, 0.0).png")
     ref_img_weak = cv2.imread("experiment_document/disentanglement_error/weak_disentanglement/grid_sample(0.0, 0.0).png")
+    image1 = cv2.imread("")
+    image2 = cv2.imread("")
 
     test_image_name_list = ['grid_sample(1.0, 1.0).png','grid_sample(1.0, -1.0).png','grid_sample(-1.0, 1.0).png','grid_sample(-1.0, -1.0).png']
 
-    for img_name in test_image_name_list:
-        img_file_strong = "experiment_document/disentanglement_error/strong_disentanglement/" + img_name
-        img_file_weak = "experiment_document/disentanglement_error/weak_disentanglement/" + img_name
-
-        cur_img_strong = cv2.imread(img_file_strong)
-        cur_img_weak = cv2.imread(img_file_weak)
-
-        strong_img_pair = (ref_img_strong,cur_img_strong)
-        weak_img_pair = (ref_img_weak,cur_img_weak)
-
-        print(f"Image name: {img_name}")
-        print("=====================Strong pairs=============================")
-        compute_image_attribute_displacement(ref_img_strong,cur_img_strong,base_opt=base_opt)
-
-        print("=====================Weak pairs=============================")
-        compute_image_attribute_displacement(ref_img_weak,cur_img_weak,base_opt=base_opt)
-        print("============================================================")
-        print("\n")
+    dt.compute_image_attribute_displacement(img1=,img2=)
 
     end = time.time()
     print(f"time_elapse:{end - start}")

@@ -1251,8 +1251,8 @@ if __name__ == "__main__":
     if eval_config.mode == 'render_gaze_redirction':
         sub_folder = 'gaze_redirection_output'
         for subject in subject_included:
-            hdf_file =os.path.join(hdf_file,f'processed_test_{subject}')
-            tt.render_gaze_redirection_gif(hdf_file_path=hdf_file,
+            hdf_file_temp =os.path.join(hdf_file,f'processed_test_{subject}')
+            tt.render_gaze_redirection_gif(hdf_file_path=hdf_file_temp,
                                             image_index=image_index,
-                                            save_root=os.path.join(save_root,sub_folder,subject),num_frames=10)
+                                            save_root=os.path.join(save_root,sub_folder,subject),num_frames=20)
 

@@ -68,20 +68,20 @@ training_config:
 
 eval_config:
   mode: 'render_gaze_redirction' #["full_evaluation","gridsample_face_gaze"]
-  model_name: 'HeadNeRF' #['HeadNeRF_Gaze','HeadNeRF']
-  model_path: 'TrainedModels/10_cam_view_disentangle_results/epoch_17_0.90_19.58_0.06_ckpt.pth.tar'
+  model_name: 'HeadNeRF_Gaze' #['HeadNeRF_Gaze','HeadNeRF']
+  model_path: 'TrainedModels/final_results/ours/baseline_multi_subject_model.tar'
   hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
   cam_included: [0,1,2,3,4,5,6,7,8,9]
   
   gaze_dim: 64
   eye_gaze_scale_factor: 1.0
-  vis_gaze_vect: True
+  vis_gaze_vect: False
   D6_rotation: False
   save_root: 'experiment_document'
   sample_size: 200 #total sample size for data evaluation
   print_freq: 1 #freq to print out rendered image
   #mode specific param
-  subject_included: ['subject0000'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
+  subject_included: ['subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
   image_index: 0
  
 

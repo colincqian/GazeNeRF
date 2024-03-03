@@ -83,6 +83,33 @@ def run(training_config,dataset_config,base_opt):
                         dataset_config=dataset_config
                         )
 
+
+    import cv2
+    for data_info in data_loader[0]:
+        temp_image = data_info['template_img']
+        temp_image_np = (temp_image[0,0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+        eye_mask = data_info['eye_mask']
+        eye_mask_np = (eye_mask[0,0].detach().cpu().permute(1, 2, 0).numpy()).astype(np.uint8)
+        head_mask = data_info['img_mask']
+        head_mask_np = (head_mask[0,0].detach().cpu().permute(1, 2, 0).numpy()).astype(np.uint8)
+        non_eye_mask = np.logical_xor(head_mask_np,eye_mask_np)
+        cv2.imshow('current rendering', temp_image_np)
+        cv2.waitKey(0) 
+        #closing all open windows 
+        cv2.destroyAllWindows() 
+        cv2.imshow('current rendering', eye_mask_np)
+        cv2.waitKey(0) 
+        #closing all open windows 
+        cv2.destroyAllWindows() 
+        cv2.imshow('current rendering', head_mask_np)
+        cv2.waitKey(0) 
+        #closing all open windows 
+        cv2.destroyAllWindows() 
+        cv2.imshow('current rendering', non_eye_mask.astype(np.uint8)*255)
+        cv2.waitKey(0) 
+        #closing all open windows 
+        cv2.destroyAllWindows() 
+
     # instantiate trainer
     training_config.add("base_opt",opt)
     trainer = Trainer(training_config, data_loader)
