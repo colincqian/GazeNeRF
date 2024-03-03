@@ -23,6 +23,7 @@ class BaseOptions(object):
         self.world_z1 = 2.5
         self.world_z2 = -3.5
         self.mlp_hidden_nchannels = 384
+        self.feat_addition_alpha = 1.0
 
         if para_dict is None:
             self.featmap_size = 32
@@ -37,17 +38,15 @@ class BaseOptions(object):
 dataset_config={
     'dataset_path': './XGaze_data/processed_data_10cam',
     'opt': BaseOptions(),
-    'keys_to_use':['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008','subject0009','subject0010','subject0013'], 
-    'sub_folder':'train',
+    'keys_to_use':['subject0000'],#,'subject0003','subject0004','subject0005'], 
     'camera_dir':'./XGaze_data/camera_parameters',
-    '_3dmm_data_dir':'./XGaze_data/normalized_250_data',
     'transform':None, 
     'is_shuffle':True,
     'index_file':None, 
     'is_load_label':True,
     'device': 'cpu',
-    'filter_view': True
-
+    'filter_view': False,
+    'use_template':True
 }
 
 

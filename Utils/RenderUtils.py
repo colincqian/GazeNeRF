@@ -7,16 +7,16 @@ import numpy as np
 import cv2
 import math
 
+from Utils.Gaze_estimator.Gaze_estimation import face_gaze_estimiator,draw_gaze
 
+# try:
+#     import sys
+#     sys.path.insert(1, '/home/colinqian/Project/ETH-XGaze/ETH-XGaze')
+#     from Utils.Gaze_estimator.Gaze_estimation import face_gaze_estimiator,draw_gaze
+# except:
+#     print('cannot load face gaze estimator!! Dont do evalutaion based on estimator')
 
-import sys
-sys.path.insert(1, '/home/colinqian/Project/ETH-XGaze/ETH-XGaze')
-try:
-    from demo import face_gaze_estimiator,draw_gaze
-except:
-    pass
-
-from Utils.D6_rotation import gaze_to_d6
+# from Utils.D6_rotation import gaze_to_d6
 
 class RenderUtils(object):
     def __init__(self, view_num, device, opt: BaseOptions) -> None:
@@ -160,23 +160,27 @@ class RenderUtils(object):
         return vertical_error,horizontal_error
     
 
-    def render_face_with_gaze(self,net,code_info,face_gaze,scale_factor,gaze_dim,vis_vect=True,cam_info = None):
+    def render_face_with_gaze(self,net,code_info,face_gaze,scale_factor,gaze_dim,cam_info = None):
         batch_xy = self.ray_xy
         batch_uv = self.ray_uv
         shape_code = code_info["shape_code"]
         appea_code = code_info["appea_code"]
         if cam_info is None:
             cam_info = self.base_cam_info
+
         face_gaze = face_gaze.view(-1)
         face_gaze_feat = face_gaze.repeat(1,gaze_dim//face_gaze.size(0)) * scale_factor
 
-        shape_code[0,-gaze_dim:]= face_gaze_feat
+        if "input_gaze" in code_info:
+            code_info["input_gaze"] = face_gaze_feat.float()
+        else:
+            shape_code[0,-gaze_dim:]= face_gaze_feat
+            code_info = {
+                "bg_code":None,
+                "shape_code":shape_code, 
+                "appea_code":appea_code
+            }
 
-        code_info = {
-            "bg_code":None,
-            "shape_code":shape_code, 
-            "appea_code":appea_code
-        }
 
         with torch.set_grad_enabled(False):
             pred_dict = net("test",batch_xy, batch_uv, **code_info,**cam_info)
@@ -189,18 +193,17 @@ class RenderUtils(object):
 
         coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
         coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
-        
-        if vis_vect:    
-            return self.render_gaze_vect(coarse_fg_rgb.copy(),cam_info,face_gaze)
+    
 
-        return coarse_fg_rgb,0,0
+        return coarse_fg_rgb,cam_info,face_gaze
 
     def render_gaze_vect(self,coarse_fg_rgb,cam_info,face_gaze):
+        #face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
         try:
             face_patch_gaze, pred_gaze_np = face_gaze_estimiator(coarse_fg_rgb.copy(),normalized_input=False,load_self_defined_camera=True,**cam_info)
         except:
             print('no face detected')
-            return coarse_fg_rgb, -1, -1
+            return coarse_fg_rgb, -1, -1, (0,0)
         cv2.putText(img=face_patch_gaze, text=str(pred_gaze_np), org=(0, 50), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(255, 0, 0),thickness=1)
 
         input_gaze_np = face_gaze.detach().cpu().numpy()
@@ -216,7 +219,7 @@ class RenderUtils(object):
         cv2.putText(img=face_patch_gaze, text='vertical_e' + str(e_v), org=(0, 450), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(0, 0, 0),thickness=1)
         cv2.putText(img=face_patch_gaze, text='horizontal_e' + str(e_h), org=(0,475), fontFace=cv2.FONT_HERSHEY_TRIPLEX, fontScale=0.5, color=(0, 0, 0),thickness=1)
         
-        return face_patch_gaze,e_v,e_h
+        return face_patch_gaze,e_v,e_h,pred_gaze_np
 
     def render_gaze_redirect_res(self, net, code_info_1, code_info_2, nums, scale_factor,gaze_dim,vis_vect=True, D6_rotation=False,cam_info = None):
         ##code1 and code2 only have difference in last few columns (gaze tensor)

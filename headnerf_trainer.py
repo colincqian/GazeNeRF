@@ -1,4 +1,5 @@
 from cmath import isnan
+from email.policy import strict
 import select
 
 
@@ -15,9 +16,7 @@ import os
 import numpy as np
 
 import shutil
-
-from HeadNeRFOptions import BaseOptions
-from NetWorks.HeadNeRFNet import HeadNeRFNet
+from NetWorks.HeadNeRFNet import HeadNeRFNet,HeadNeRFNet_Gaze
 from Utils.HeadNeRFLossUtils import HeadNeRFLossUtils
 from Utils.RenderUtils import RenderUtils
 from Utils.Eval_utils import calc_eval_metrics
@@ -26,6 +25,10 @@ import cv2
 from Utils.Log_utils import log
 from Utils.D6_rotation import gaze_to_d6
 
+model_list = {
+    'HeadNeRF':HeadNeRFNet,
+    'HeadNeRF_Gaze':HeadNeRFNet_Gaze
+}
 
 class Trainer(object):
     def __init__(self,config,data_loader):
@@ -66,6 +69,8 @@ class Trainer(object):
         self.lr_patience = config.lr_patience
         self.lr_decay_factor = config.lr_decay_factor
         self.resume = config.resume
+        if self.resume:
+            self.is_finetune = config.is_finetune
 
 
         # misc params
@@ -89,14 +94,14 @@ class Trainer(object):
             check_dict = torch.load(self.headnerf_options, map_location=torch.device("cpu"))
 
             para_dict = check_dict["para"]
-            self.opt = BaseOptions(para_dict)
+            self.opt = config.base_opt
 
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=self.include_eye_gaze,eye_gaze_dim=self.eye_gaze_dim)  
+            self.model = model_list[config.model_name](self.opt, include_vd=False, hier_sampling=False,eye_gaze_dim=self.eye_gaze_dim)  
             self._load_model_parameter(check_dict)
             print(f'load model parameter from {self.headnerf_options},set include_eye gaze to be {self.include_eye_gaze}')
         else:
-            self.opt = BaseOptions()
-            self.model = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False,include_gaze=self.include_eye_gaze,eye_gaze_dim=self.eye_gaze_dim)   
+            self.opt = config.base_opt
+            self.model = model_list[config.model_name](self.opt, include_vd=False, hier_sampling=False,eye_gaze_dim=self.eye_gaze_dim)   
             print(f'Train model from scratch, set include_eye gaze to be {self.include_eye_gaze}')     
         
         ##device setting
@@ -121,8 +126,10 @@ class Trainer(object):
         self._build_tool_funcs()
 
         if self.resume:
-            self.load_checkpoint(self.resume)
+            self.load_checkpoint(self.resume,finetune=self.is_finetune)
             
+        self.config = config
+
     def _load_model_parameter(self,check_dict):
         #dealing with extended model when include eye gaze input
         if self.include_eye_gaze:
@@ -137,7 +144,7 @@ class Trainer(object):
                 assert new_weight.size(1) == c + self.eye_gaze_dim
                 check_dict["net"][key] = new_weight
             print(f'Eye gaze feature dimension: {self.eye_gaze_dim}')
-        self.model.load_state_dict(check_dict["net"])
+        self.model.load_state_dict(check_dict["net"], strict=False)
 
     def _build_tool_funcs(self):
         self.loss_utils = HeadNeRFLossUtils(device=self.device)
@@ -190,7 +197,12 @@ class Trainer(object):
             "shape_code":shape_code.to(self.device), 
             "appea_code":appea_code.to(self.device), 
         }
-        return code_info,cam_info
+
+        gaze_info = {
+            "input_gaze": face_gaze.repeat(1,self.eye_gaze_dim//face_gaze.size(1)),
+            "eye_mask": data_info[self.config.gaze_info_mask] #data_info['img_mask']
+        }
+        return code_info,cam_info,gaze_info
     
     def train(self):
         self.logging_config('./logs')
@@ -242,42 +254,49 @@ class Trainer(object):
         
         pred_dict_p = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
 
+        if 'template_img' in data_info:
+            pred_dict_p['template_img_gt'] = data_info['template_img']
+
         return pred_dict_p,face_gaze_new
 
 
     def train_one_epoch(self, epoch, data_loader, is_train=True):
         loop_bar = tqdm(enumerate(data_loader), leave=False, total=len(data_loader))
         for iter,data_info in loop_bar:
-
+            
             with torch.set_grad_enabled(True):
-                code_info,cam_info = self.build_code_and_cam_info(data_info)
+                code_info,cam_info,gaze_info = self.build_code_and_cam_info(data_info)
 
-                pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info)
+                pred_dict = self.model( "train", self.xy, self.uv,  **code_info, **cam_info, **gaze_info)
                 
                 if self.disentangle:
                     disp_pred_dict,disp_gaze = self.eye_gaze_displacement(data_info,code_info,cam_info)
                 else:
                     disp_pred_dict = None
+                
+                gt_label = {"gt_rgb" : data_info['img'].squeeze(1).to(self.device)}
 
-                gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
+                if 'template_img' in data_info:
+                    gt_label["template_img_gt"] = data_info['template_img'].squeeze(1).to(self.device)
 
+                mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
+                
                 ##compute head loss
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=None, opt_code_dict=None, pred_dict=pred_dict, disp_pred_dict=disp_pred_dict,
-                    gt_rgb=gt_img.to(self.device), mask_tensor=mask_img.to(self.device),eye_mask_tensor=eye_mask.to(self.device)
+                    gt_rgb=gt_label, mask_tensor=mask_img.to(self.device),eye_mask_tensor=eye_mask.to(self.device),loss_weight=self.config.loss_config
                 )
             
             self.optimizer.zero_grad()
             batch_loss_dict["total_loss"].backward()
             self.optimizer.step()
-
+            
             if isnan(batch_loss_dict["head_loss"].item()):
                 import warnings
                 warnings.warn('nan found in batch loss !! please check output of HeadNeRF')
-            if self.disentangle:
-                loop_bar.set_description("Opt, Head_loss/Img_disp/Lm_disp: %.6f / %.6f / %.6f" % (batch_loss_dict["head_loss"].item(),batch_loss_dict["image_disp_loss"].item(),batch_loss_dict["lm_disp_loss"].item()) )  
-            else:
-                loop_bar.set_description("Opt, Head_loss: %.6f " % (batch_loss_dict["head_loss"].item()) )  
+            
+            
+            loop_bar.set_description("Opt, Head_loss/Percep_loss/Eye_loss: %.6f / %.6f / %.6f " % (batch_loss_dict["head_loss"].item(),batch_loss_dict["vgg"].item(),batch_loss_dict["eye_loss"].item()) )  
 
 
                 
@@ -294,21 +313,29 @@ class Trainer(object):
         uv = self.render_utils.ray_uv.to(self.device).expand(self.val_loader.batch_size,-1,-1)
         for iter,data_info in loop_bar:
             with torch.set_grad_enabled(False):
-                code_info,cam_info = self.build_code_and_cam_info(data_info)
+                code_info,cam_info,gaze_info = self.build_code_and_cam_info(data_info)
 
-                pred_dict = self.model( "test", xy, uv,  **code_info, **cam_info)
+                pred_dict = self.model( "test", xy, uv,  **code_info, **cam_info,**gaze_info)
 
                 gt_img = data_info['img'].squeeze(1); mask_img = data_info['img_mask'].squeeze(1);eye_mask=data_info['eye_mask'].squeeze(1)
 
-                eval_metrics = calc_eval_metrics(pred_dict=pred_dict,gt_rgb=gt_img.to(self.device),mask_tensor=mask_img.to(self.device),vis=False)
+                coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
+                pred_image= (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+                gt_img = gt_img.to(self.device)
+                label_image_np = (gt_img[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+
+                eval_metrics = calc_eval_metrics(pred_image,label_image_np,vis=False)
                 
                 output_dict['SSIM'] += eval_metrics['SSIM']
                 output_dict['PSNR'] += eval_metrics['PSNR']
                 output_dict['LPIPS'] += eval_metrics['LPIPS']
                 count+=1
-
+            
             if iter % self.print_freq == 0 and iter != 0:
-                self._display_current_rendered_image(pred_dict,gt_img,iter)
+                if 'template_img' in data_info:
+                    self._display_current_rendered_image(pred_dict,gt_img,iter,template_gt=data_info['template_img'].squeeze(1).to(self.device))
+                else:
+                    self._display_current_rendered_image(pred_dict,gt_img,iter)
         
         output_dict['SSIM'] /= count
         output_dict['PSNR'] /= count
@@ -326,12 +353,16 @@ class Trainer(object):
             filename = add + '_ckpt.pth.tar'
         else:
             filename ='ckpt.pth.tar'
+
+        if not os.path.exists(self.ckpt_dir):
+            os.makedirs(self.ckpt_dir)
+
         ckpt_path = os.path.join(self.ckpt_dir, filename)
         torch.save(state, ckpt_path)
 
         print('save file to: ', filename)
 
-    def load_checkpoint(self, input_file_path='./ckpt/ckpt.pth.tar', is_strict=True):
+    def load_checkpoint(self, input_file_path='./ckpt/ckpt.pth.tar', is_strict=True, finetune=True):
         """
         Load the copy of a model.
         """
@@ -340,23 +371,35 @@ class Trainer(object):
 
         # load variables from checkpoint
         self.model.load_state_dict(ckpt['net'], strict=is_strict)
-        self.optimizer.load_state_dict(ckpt['optim_state'])
-        self.scheduler.load_state_dict(ckpt['scheule_state'])
-        self.start_epoch = ckpt['epoch'] 
+        if not finetune:
+            self.optimizer.load_state_dict(ckpt['optim_state'])
+            self.scheduler.load_state_dict(ckpt['scheule_state'])
+            self.start_epoch = ckpt['epoch'] 
+            
+        if finetune:
+            print(f"Finetuning to model {self.ckpt_dir}")
 
         print(
             "[*] Loaded {} checkpoint @ epoch {}".format(
                 input_file_path, ckpt['epoch'])
         )
 
-    def _display_current_rendered_image(self,pred_dict,img_tensor,iter):
+    def _display_current_rendered_image(self,pred_dict,img_tensor,iter,template_gt=None):
         coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
         coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         #coarse_fg_rgb = coarse_fg_rgb[:, :, [2, 1, 0]]
         gt_img = (img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         res_img = np.concatenate([gt_img, coarse_fg_rgb], axis=1)
 
+        if "template_img" in pred_dict["coarse_dict"]:
+            template_img = pred_dict["coarse_dict"]["template_img"]
+            template_img = (template_img[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+            res_img = np.concatenate([res_img, template_img], axis=1)
         
+        if template_gt is not None:
+            gt_template_img = (template_gt[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+            res_img = np.concatenate([res_img, gt_template_img], axis=1)
+
         log_path = './logs/temp_image/' + 'epoch' + str(self.cur_epoch)
         if not os.path.exists(log_path):
             os.mkdir(log_path)
@@ -392,12 +435,11 @@ class Trainer(object):
 
 
 if __name__ == '__main__':
-    check_dict = torch.load("TrainedModels/model_Reso32.pth", map_location=torch.device("cpu"))
-    para_dict = check_dict["para"]
-    opt = BaseOptions(para_dict)
-    model = HeadNeRFNet(opt, include_vd=False, hier_sampling=False,include_gaze=True)  
-    import ipdb
-    ipdb.set_trace()
-    model.load_state_dict(check_dict["net"])
-
-
+    pass
+    # check_dict = torch.load("TrainedModels/model_Reso32.pth", map_location=torch.device("cpu"))
+    # para_dict = check_dict["para"]
+    # opt = BaseOptions(para_dict)
+    # model = HeadNeRFNet(opt, include_vd=False, hier_sampling=False,include_gaze=True)  
+    # import ipdb
+    # ipdb.set_trace()
+    # model.load_state_dict(check_dict["net"])

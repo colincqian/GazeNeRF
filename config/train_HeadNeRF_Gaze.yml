@@ -1,0 +1,84 @@
+base_opt:
+  bg_type: white
+  iden_code_dims: 100
+  expr_code_dims: 79
+  text_code_dims: 100
+  illu_code_dims: 27
+  auxi_shape_code_dims: 179
+  auxi_appea_code_dims: 127
+  num_sample_coarse: 64
+  num_sample_fine: 128
+  world_z1: 2.5
+  world_z2: -3.5
+  mlp_hidden_nchannels: 384
+  featmap_size: 32
+  featmap_nc: 256
+  pred_img_size: 256
+  feat_addition_alpha: 1.0 #feat addition aplpha
+  template_gaze_noise: 0.08
+  
+  
+dataset_config:
+  dataset_path: ./XGaze_data/processed_data_10cam #where we stored processed data
+  keys_to_use: ['subject0000'] ##subject to use
+  camera_dir: ./XGaze_data/camera_parameters ##folder which saved camera parameter
+  transform: Null #transformation to input image
+  is_shuffle: True #whether to shuffle data when loading
+  index_file: Null #any index file specific data index
+  is_load_label: True #whether load gt gaze
+  device: cpu ##need to process numpy on cpu
+  filter_view: False #whether to filter camera view
+  use_template: True #whethre to use template
+
+training_config:
+  model_name: HeadNeRF_Gaze # HeadNeRF
+  comment: 'Add gaze feat before vol-rendering, feat addition 0.8 white eye issue solved'  ##comment in log file to describe the experiment
+  #data_param
+  data_dir: data/xgaze #Directory of the data
+  batch_size: 1
+  num_workers: 5
+  #train param
+  is_train: True
+  epochs: 25
+  init_lr: 0.0001
+  lr_patience: 15
+  lr_decay_factor: 0.1
+  #misc
+  use_gpu: True
+  gpu_id: 6
+  pre_trained_model_path: ./ckpt/epoch_24_ckpt.pth.tar
+  print_freq: 50
+  ckpt_dir: ./logs/ckpt
+  headnerf_options: 'TrainedModels/model_Reso32HR.pth' #path to load headnerf options
+  #gaze realted
+  use_gt_camera: False
+  include_eye_gaze: False
+  eye_gaze_dimension: 64
+  eye_gaze_scale_factor: 1
+  eye_gaze_disentangle: False
+  gaze_D6_rotation: False
+  resume: ''   ##ckpt file dir to resume training
+  gaze_info_mask: eye_mask #img_mask
+  #loss param
+  loss_config:
+    bg_loss: 1.0
+    head_loss: 1.0
+    nonhead_loss: 1.0
+    vgg: 1.0
+    eye_loss: 10
+    template_loss: 0.5
+    template_eye_loss: 0.0
+    image_disp_loss: 1.0
+    lm_disp_loss: 1.0
+    delta_eular: 0.001
+    delta_tvec: 0.001
+    iden_code: 0.001
+    expr_code: 1.0
+    appea_code: 0.001
+    bg_code: 0.01
+    template_loss_mask: non_eye # full_heads
+
+  
+  
+
+

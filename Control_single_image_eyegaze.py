@@ -1,9 +1,10 @@
 from os.path import join
 import os
+from re import sub
 from tracemalloc import start
 import torch
 import numpy as np
-from NetWorks.HeadNeRFNet import HeadNeRFNet
+from NetWorks.HeadNeRFNet import HeadNeRFNet,HeadNeRFNet_Gaze
 import cv2
 from HeadNeRFOptions import BaseOptions
 from Utils.HeadNeRFLossUtils import HeadNeRFLossUtils
@@ -26,11 +27,20 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import shutil
 
+from Utils.Eval_utils import calc_eval_metrics
+import pickle
+
 #define eye gaze base
 UPPER_RIGHT = torch.tensor([0.25,-0.5])
 UPPER_LEFT = torch.tensor([0.25,0.6])
 LOWER_RIGHT = torch.tensor([-0.5,-0.5])
 LOWER_LEFT = torch.tensor([-0.5,0.6])
+
+model_list = {
+    'HeadNeRF':HeadNeRFNet,
+    'HeadNeRF_Gaze':HeadNeRFNet_Gaze
+}
+
 
 def gaze_feat_tensor(gaze_dim,scale_factor,base_gaze_value):
 
@@ -45,11 +55,13 @@ def gaze_feat_tensor(gaze_dim,scale_factor,base_gaze_value):
 class FittingImage(object):
     
     def __init__(self, model_path, save_root, gpu_id, 
+                    config,
                     include_eye_gaze = True,
                     eye_gaze_dim = 16,
                     gaze_scale_factor = 1,
                     vis_vect = False,
-                    D6_rotation = False) -> None:
+                    D6_rotation = False,
+                    model_name = 'HeadNeRF') -> None:
         super().__init__()
         self.model_path = model_path
 
@@ -65,7 +77,7 @@ class FittingImage(object):
         self.scale_factor = gaze_scale_factor
         self.vis_vect = vis_vect
         self.use_6D_rotation = D6_rotation
-        
+        self.model_name = model_name
         self.error_ave_dict = {'ave_e_h0':[],
                                 'ave_e_v0':[],
                                 'ave_e_h1':[],
@@ -73,6 +85,7 @@ class FittingImage(object):
                                 'ave_e_h2':[],
                                 'ave_e_v2':[],
         }
+        self.config = config
         self.build_info()
         self.build_tool_funcs()
 
@@ -88,8 +101,8 @@ class FittingImage(object):
         
         if not os.path.exists(self.save_root): os.mkdir(self.save_root)
 
-        net = HeadNeRFNet(self.opt, include_vd=False, hier_sampling=False, include_gaze=self.include_eye_gaze,eye_gaze_dim=self.eye_gaze_dim)        
-        net.load_state_dict(check_dict["net"])
+        net = model_list[self.model_name](self.opt, include_vd=False, hier_sampling=False, eye_gaze_dim=self.eye_gaze_dim)        
+        net.load_state_dict(check_dict["net"],strict=False)
         
         self.net = net.to(self.device)
         self.net.eval()
@@ -131,13 +144,16 @@ class FittingImage(object):
         self.uncropped_gt_image = (img * 255).astype(np.uint8)
         
         mask_img =  self.hdf['mask'][img_index]
+        eye_mask_img = self.hdf['eye_mask'][img_index]
         if mask_img.shape[0] != self.pred_img_size:
             mask_img = cv2.resize(mask_img, dsize=img_size, fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
+        if eye_mask_img.shape[0] != self.pred_img_size:
+            eye_mask_img = cv2.resize(eye_mask_img, dsize=img_size, fx=0, fy=0, interpolation=cv2.INTER_NEAREST)
         img[mask_img < 0.5] = 1.0
         
         self.img_tensor = (torch.from_numpy(img).permute(2, 0, 1)).unsqueeze(0).to(self.device)
         self.mask_tensor = torch.from_numpy(mask_img[None, :, :]).unsqueeze(0).to(self.device)
-        
+        self.eye_mask_tensor = torch.from_numpy(eye_mask_img[None, :, :]).unsqueeze(0).to(self.device)
 
         gaze_label = self.hdf['face_gaze'][img_index]
         gaze_label = gaze_label.astype('float')
@@ -228,7 +244,7 @@ class FittingImage(object):
     def build_code_and_cam(self):
         
         # code
-        if self.include_eye_gaze:
+        if self.include_eye_gaze and self.model_name == 'HeadNeRF':
             shape_code = torch.cat([self.base_iden + self.iden_offset, self.base_expr + self.expr_offset,self.base_gaze + self.gaze_offset], dim=-1)
             #appea_code = torch.cat([self.base_text, self.base_illu, self.base_gaze], dim=-1) + self.appea_offset
             appea_code = torch.cat([self.base_text, self.base_illu], dim=-1) + self.appea_offset
@@ -243,7 +259,7 @@ class FittingImage(object):
             "appea":self.appea_offset
         }
 
-        if self.include_eye_gaze:
+        if self.include_eye_gaze and self.model_name == 'HeadNeRF':
             opt_code_dict['gaze']=self.gaze_offset
         
         code_info = {
@@ -277,7 +293,15 @@ class FittingImage(object):
             delta_cam_info = None
             batch_cam_info = self.cam_info
 
+ 
+        if self.model_name == 'HeadNeRF_Gaze':
+            code_info.update(
+                {
+                    "input_gaze": self.base_gaze.float().to(self.device),
+                    "eye_mask" : self.mask_tensor.float().to(self.device)
+                }
 
+            )
         return code_info, opt_code_dict, batch_cam_info, delta_cam_info
     
     
@@ -295,7 +319,7 @@ class FittingImage(object):
         self.expr_offset = torch.zeros((1, 79), dtype=torch.float32).to(self.device)
         self.appea_offset = torch.zeros((1, 127), dtype=torch.float32).to(self.device)
 
-        if self.include_eye_gaze:
+        if self.include_eye_gaze and self.model_name == 'HeadNeRF':
             self.gaze_offset = torch.zeros((1, self.eye_gaze_dim), dtype=torch.float32).to(self.device)
             self.enable_gradient([self.gaze_offset])
             #self.appea_offset = torch.cat((self.appea_offset,torch.zeros(1,self.eye_gaze_dim,device = self.device)),dim=1)
@@ -320,7 +344,7 @@ class FittingImage(object):
             {'params': [self.appea_offset], 'lr': init_learn_rate * 1.0},
         ]
 
-        if self.include_eye_gaze:
+        if self.include_eye_gaze and self.model_name == 'HeadNeRF':
             params_group.append({'params': [self.gaze_offset], 'lr': init_learn_rate * 1.0})
         
         if self.opt_cam:
@@ -349,7 +373,7 @@ class FittingImage(object):
                 
                 batch_loss_dict = self.loss_utils.calc_total_loss(
                     delta_cam_info=delta_cam_info, opt_code_dict=opt_code_dict, pred_dict=pred_dict, disp_pred_dict=None,
-                    gt_rgb=self.img_tensor, mask_tensor=self.mask_tensor
+                    gt_rgb=self.img_tensor, mask_tensor=self.mask_tensor,loss_weight=self.config.loss_config
                 )
 
             optimizer.zero_grad()
@@ -366,8 +390,6 @@ class FittingImage(object):
         coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
         coarse_fg_rgb = cv2.cvtColor(coarse_fg_rgb, cv2.COLOR_BGR2RGB)
         res_img = np.concatenate([gt_img, coarse_fg_rgb], axis=1)
-
-        
         
         self.res_img = res_img
         self.res_code_info = code_info
@@ -470,7 +492,9 @@ class FittingImage(object):
         for row_idx,pitch in loop_bar1:
             for col_idx,yaw in enumerate(np.linspace(1,-1,resolution,endpoint=True)):
                 input_gaze = torch.tensor([pitch,yaw])
-                rendered_results,e_v2,e_h2 = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=input_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,vis_vect=vis_vect,cam_info=self.cam_info)
+                rendered_results,cam_info,face_gaze = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=input_gaze,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
+                if self.vis_vect:
+                    rendered_results,e_v2,e_h2 = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
                 e_v_map[row_idx,col_idx] = e_v2 * 180 / np.pi
                 e_h_map[row_idx,col_idx] = e_h2 * 180 / np.pi ##in degree
                 if (row_idx * resolution + col_idx ) % print_freq == 0:
@@ -531,6 +555,90 @@ class FittingImage(object):
         self._polt_2d_map_with_colorbar(e_total_map,title='total_error gt',interpolation='bilinear')
 
         
+    def evaluation_subject(self,input_dir,subjects_name,save_root,print_freq = 10):
+        if os.path.exists(save_root):
+            shutil.rmtree(save_root)
+            os.mkdir(save_root)
+        else:
+            os.mkdir(save_root)
+        hdf_file_path = os.path.join(input_dir,subjects_name)
+        self.hdf = h5py.File(hdf_file_path, 'r', swmr=True)
+        sample_size = self.hdf['cam_index'].shape[0]
+        output_dict = {
+        'SSIM':[0]*sample_size,
+        'PSNR':[0]*sample_size,
+        'LPIPS':[0]*sample_size,
+        'L1_loss':[0]*sample_size,
+        'vertical_error':[0]*sample_size,
+        'horizontal_error':[0]*sample_size,
+        'vertical_error_ref':[0]*sample_size,
+        'horizontal_error_ref':[0]*sample_size,
+        'sample_size':0
+        }
+        count = 0
+
+        for image_index in tqdm(range(sample_size)):
+            self.load_data(hdf_file_path,image_index,cam_idx=-1) ##inlcude all camera views
+            self.perform_fitting()
+
+            rendered_results,cam_info,face_gaze = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=self.gaze_tensor,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
+            
+            inmat_np = torch.linalg.inv(self.res_cam_info['batch_inv_inmats']).detach().cpu().numpy()
+            inmat_np = inmat_np.reshape((3,3))
+            distortion_np = np.zeros([1,5])
+            inmat_np[0,0] *=10; inmat_np[1,1] *=10; inmat_np[0,2] *=10; inmat_np[1,2] *=10
+            cam_info = {'camera_matrix':inmat_np, 'camera_distortion':distortion_np}
+            
+            gt_img = (self.img_tensor[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
+            gt_img = cv2.cvtColor(gt_img, cv2.COLOR_BGR2RGB)
+
+            eval_metrics = calc_eval_metrics(rendered_results.copy(),gt_img.copy(),vis=False,L1_loss=True)
+            
+            #visualiza difference map
+            difference = cv2.subtract(gt_img,rendered_results)
+            Conv_hsv_Gray = cv2.cvtColor(difference, cv2.COLOR_BGR2GRAY)
+            ret, mask = cv2.threshold(Conv_hsv_Gray, 0, 255,cv2.THRESH_BINARY_INV|cv2.THRESH_OTSU)
+            difference[mask != 255] = [0, 0, 255]
+            diff_rendered = rendered_results.copy()
+            diff_rendered[mask != 255] = [0, 0, 255]
+
+            if self.vis_vect:
+                rendered_results,e_v2,e_h2 = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
+                gt_img,e_v1,e_h1 = self.render_utils.render_gaze_vect(gt_img,cam_info=cam_info,face_gaze=self.gaze_tensor)
+                
+
+                if e_v2 == -1 or e_v1 == -1:
+                    # no face detected in estimator
+                    print('skip this sample!')
+                    continue
+                    
+                output_dict['vertical_error'][count] = e_v2
+                output_dict['horizontal_error'][count] = e_h2
+                output_dict['vertical_error_ref'][count] = e_v1
+                output_dict['horizontal_error_ref'][count] = e_h1
+
+                        ## compute gaze gap between label and estimated
+            for k,v in eval_metrics.items():
+                output_dict[k][count] = v
+            count += 1
+
+            if count % print_freq == 0:
+                res_img = np.concatenate([gt_img, rendered_results,difference,diff_rendered], axis=1)
+                cv2.imwrite(os.path.join(save_root,f'testing_image{count}.png'),res_img)
+            
+        output_dict['sample_size'] = count
+        with open(os.path.join(save_root,f"{subjects_name}_eval_metrics.pkl"),'wb') as file:
+            pickle.dump(output_dict,file)
+
+        ##visualization
+        from prettytable import PrettyTable
+        t = PrettyTable(['Metrics', 'Value'])
+        for k,v in output_dict.items():
+            if k != 'sample_size':
+                mean_value = np.sum(v)/count
+                t.add_row([k,mean_value])
+        t.add_row(['sample_size',count])
+        print(t)
 
 
     def render_face_gaze_and_ground_truth_image(self,hdf_file_path,image_index,save_root,vis_vect=True):
@@ -540,8 +648,10 @@ class FittingImage(object):
 
         self.load_data(hdf_file_path,image_index,cam_idx=-1)
         self.perform_fitting()
-        rendered_results,e_v2,e_h2 = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=self.gaze_tensor,scale_factor = 1,gaze_dim = self.eye_gaze_dim,vis_vect=vis_vect,cam_info=self.cam_info)
-        
+        rendered_results,cam_info,face_gaze = self.render_utils.render_face_with_gaze(self.net,self.res_code_info,face_gaze=self.gaze_tensor,scale_factor = 1,gaze_dim = self.eye_gaze_dim,cam_info=self.cam_info)
+        if self.vis_vect:
+            rendered_results,e_v2,e_h2 = self.render_utils.render_gaze_vect(rendered_results,cam_info,face_gaze)
+
         inmat_np = torch.linalg.inv(self.res_cam_info['batch_inv_inmats']).detach().cpu().numpy()
         inmat_np = inmat_np.reshape((3,3))
         distortion_np = np.zeros([1,5])
@@ -567,11 +677,6 @@ class FittingImage(object):
 
 
         res_img = np.concatenate([uncropped_gt_img,gt_img, rendered_results], axis=1)
-
-        # cv2.imshow('current rendering', res_img)
-        # cv2.waitKey(0) 
-        # #closing all open windows 
-        # cv2.destroyAllWindows()  
 
         cv2.imwrite(os.path.join(save_root,f'gt_and_rendered_image{image_index}.png'),res_img)
         print('#######current average error##########')
@@ -646,7 +751,9 @@ if __name__ == "__main__":
     parser.add_argument("--eye_gaze_scale_factor", type=int, default=1)
     parser.add_argument("--vis_gaze_vect", type=str2bool, required=True,help='whether to visualize the gaze vector in result images')
     parser.add_argument("--D6_rotation", type=str2bool, default=False,help='whether to use 6D representation for eye gaze')
-   
+    parser.add_argument("--model_name", type=str, default='HeadNeRF',help='choose the model for Head rendering')
+
+    parser.add_argument("--config_file_path", type=str,help='Path to load config file')
     args = parser.parse_args()
 
 
@@ -659,7 +766,11 @@ if __name__ == "__main__":
     scale_factor = args.eye_gaze_scale_factor
     vis_vect = args.vis_gaze_vect
     use_6D_rotattion = args.D6_rotation
-    
+    model_name = args.model_name
+    config_path = args.config_file_path
+
+    from train_headnerf import load_config
+    train_config = load_config(config_path)["training_config"]
     #####
     subject_included = ['subject0000','subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
     #subject_included = ['subject0009','subject0010','subject0013']
@@ -677,28 +788,28 @@ if __name__ == "__main__":
         
     #     assert os.path.exists(target_embedding_path)
     
-    tt = FittingImage(model_path, save_root, gpu_id=0,include_eye_gaze=True,eye_gaze_dim=gaze_feat_dim,gaze_scale_factor=scale_factor,vis_vect=vis_vect,D6_rotation=use_6D_rotattion)
+    tt = FittingImage(model_path, save_root, gpu_id=0,config=train_config,include_eye_gaze=True,eye_gaze_dim=gaze_feat_dim,gaze_scale_factor=scale_factor,vis_vect=vis_vect,D6_rotation=use_6D_rotattion,model_name=model_name)
     # # #tt.fitting_single_images(hdf_file,image_index, save_root)
 
     # for image_index in range(50):
     #     tt.render_face_gaze_and_ground_truth_image(hdf_file,image_index,save_root='experiment_document/gaze_and_gt_image/')
 
-    #tt.gridsample_face_gaze(hdf_file,image_index,save_root='experiment_document/gridsample_images/',resolution=21) #grid sample gaze space
+    #tt.gridsample_face_gaze(hdf_file,image_index,save_root='experiment_document/gridsample_images/',resolution=20,print_freq=1) #grid sample gaze space
 
     #tt.sample_face_gaze_ground_truth_image(hdf_file,image_sample_num=400,resolution=21) ##sample gt images and bilinear interpolate
 
     # same subjects for 10 cams
-    for cam_id in cam_included:
-        print(f'Sampling {cam_id} !')
-        save_root = os.path.join('experiment_document/gridsample_images/',str(cam_id))
-        tt.gridsample_face_gaze(hdf_file,image_index,save_root=save_root,resolution=21,print_freq=10,cam_index=cam_id)
+    # for cam_id in cam_included:
+    #     print(f'Sampling {cam_id} !')
+    #     save_root = os.path.join('experiment_document/gridsample_images/',str(cam_id))
+    #     tt.gridsample_face_gaze(hdf_file,image_index,save_root=save_root,resolution=21,print_freq=10,cam_index=cam_id)
         
     # same cam setting for 10 subjects
-    for subject_id in subject_included:
-        print(f'Sampling {subject_id} !')
-        hdf_file = 'XGaze_data/processed_data/processed_' + subject_id
-        save_root = os.path.join('experiment_document/gridsample_images/',subject_id)
-        tt.gridsample_face_gaze(hdf_file,image_index,save_root=save_root,resolution=21,print_freq=10)
+    # for subject_id in subject_included:
+    #     print(f'Sampling {subject_id} !')
+    #     hdf_file = 'XGaze_data/processed_data/processed_' + subject_id
+    #     save_root = os.path.join('experiment_document/gridsample_images_learning_disparity/',subject_id)
+    #     tt.gridsample_face_gaze(hdf_file,image_index,save_root=save_root,resolution=21,print_freq=10)
         
 
 
@@ -715,3 +826,9 @@ if __name__ == "__main__":
     #         except:
     #             pass
 
+
+
+    #evaluate subjects
+    # tt.evaluation_subject(input_dir='XGaze_data/processed_data_10cam',\
+    #                         subjects_name='processed_test_subject0000',\
+    #                             save_root='experiment_document/evaluation_output/eval_subject000',print_freq=1)

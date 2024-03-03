@@ -1,0 +1,93 @@
+base_opt:
+  bg_type: white
+  iden_code_dims: 100
+  expr_code_dims: 79
+  text_code_dims: 100
+  illu_code_dims: 27
+  auxi_shape_code_dims: 179
+  auxi_appea_code_dims: 127
+  num_sample_coarse: 64
+  num_sample_fine: 128
+  world_z1: 2.5
+  world_z2: -3.5
+  mlp_hidden_nchannels: 384
+  featmap_size: 32
+  featmap_nc: 256
+  pred_img_size: 256
+  #specific params
+  feat_addition_alpha: 1.0 #feat addition aplpha
+  template_gaze_noise: 0
+  
+training_config:
+  model_name: HeadNeRF_Gaze # HeadNeRF
+  comment: 'Add gaze feat before vol-rendering, use eye mask data info, 
+            use non-eye template loss and eye region tamplate loss, eye loss weight 10,remove density'  ##comment in log file to describe the experiment
+  #data_param
+  data_dir: data/xgaze #Directory of the data
+  batch_size: 2
+  num_workers: 5
+  #train param
+  is_train: True
+  epochs: 25
+  init_lr: 0.0001
+  lr_patience: 10
+  lr_decay_factor: 0.1
+  #misc
+  use_gpu: True
+  gpu_id: 0
+  pre_trained_model_path: ./ckpt/epoch_24_ckpt.pth.tar
+  print_freq: 50
+  ckpt_dir: ./logs/ckpt
+  headnerf_options: 'TrainedModels/model_Reso32HR.pth' #path to load headnerf options
+  #gaze realted
+  use_gt_camera: False
+  include_eye_gaze: True
+  eye_gaze_dimension: 64
+  eye_gaze_scale_factor: 1
+  eye_gaze_disentangle: False
+  gaze_D6_rotation: False
+  resume: ''   ##ckpt file dir to resume training
+  gaze_info_mask: eye_mask #img_mask
+  #loss param
+  loss_config:
+    bg_loss: 1.0
+    head_loss: 1.0
+    nonhead_loss: 1.0
+    vgg: 1.0
+    eye_loss: 10
+    template_loss: 1.0
+    template_eye_loss: 10
+    image_disp_loss: 1.0
+    lm_disp_loss: 1.0
+    delta_eular: 0.001
+    delta_tvec: 0.001
+    iden_code: 0.001
+    expr_code: 1.0
+    appea_code: 0.001
+    bg_code: 0.01
+    template_loss_mask: non_eye # full_head
+
+eval_config:
+  mode: 'calibrated_disentanglement_error' #["full_evaluation","gridsample_face_gaze"]
+  model_name: 'HeadNeRF_Gaze' #['HeadNeRF_Gaze','HeadNeRF']
+  model_path: 'TrainedModels/final_results/ours/subject0014_finetune/epoch_4_0.85_17.46_0.06_ckpt.pth.tar'
+  hdf_file: 'XGaze_data/processed_data_10cam'  ##dataset directory
+  image_index: 0 #base image index
+  gaze_dim: 64
+  eye_gaze_scale_factor: 1.0
+  vis_gaze_vect: True
+  D6_rotation: False
+  save_root: 'experiment_document/ours'
+  ##mode parameter
+  mag_reso: 2 #freq to print out rendered image
+  vis_temp_results: True #disturbance for gaze
+  cam_included: [0] #,1,2,3,4,5,6,7,8,9]
+  subject_included: ['subject0014'] #,'subject0003','subject0004','subject0005'] #,'subject0003','subject0004','subject0005','subject0006','subject0007','subject0008']
+  norm_max: 1.5
+
+
+
+  
+  
+
+

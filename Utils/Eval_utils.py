@@ -8,7 +8,7 @@ import torch
 
 from ignite.metrics import SSIM
 
-def calc_eval_metrics(pred_dict, gt_rgb, mask_tensor,eye_mask_tensor=None,vis=False):
+def calc_eval_metrics(pred_image, label_image, eye_mask_tensor=None,vis=False,L1_loss=False):
     # head_mask = (mask_tensor >= 0.5)  
     # nonhead_mask = (mask_tensor < 0.5)  
 
@@ -22,20 +22,13 @@ def calc_eval_metrics(pred_dict, gt_rgb, mask_tensor,eye_mask_tensor=None,vis=Fa
     # image1 = res_img.view(img_size,img_size,3).cpu().detach().numpy()
     # image2 = gt_rgb.view(img_size,img_size,3).cpu().detach().numpy()
 
-    img_size = mask_tensor.size(-1)
-    coarse_fg_rgb = pred_dict["coarse_dict"]["merge_img"]
-    coarse_fg_rgb = (coarse_fg_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
-    gt_img = (gt_rgb[0].detach().cpu().permute(1, 2, 0).numpy()* 255).astype(np.uint8)
-
-    image1 = coarse_fg_rgb
-    image2 = gt_img
+    image1 = pred_image
+    image2 = label_image
 
     if vis:
-        cv2.imshow('image1 rendering', coarse_fg_rgb)
+        cv2.imshow('image1 rendering', pred_image)
         cv2.waitKey(0) 
-        cv2.imshow('image2 rendering', gt_img)
-        cv2.waitKey(0) 
-        cv2.imshow('mask rendering', mask_tensor.view(img_size,img_size).detach().cpu().numpy())
+        cv2.imshow('image2 rendering', label_image)
         cv2.waitKey(0) 
         #closing all open windows 
         cv2.destroyAllWindows() 
@@ -45,6 +38,8 @@ def calc_eval_metrics(pred_dict, gt_rgb, mask_tensor,eye_mask_tensor=None,vis=Fa
         'PSNR':compute_PSNR_score(image1,image2),
         'LPIPS':compute_LPIPS(image1,image2)
     }
+    if L1_loss:
+        metrics_dict['L1_loss'] = compute_L1_score(image1,image2)
     return metrics_dict
 
 
